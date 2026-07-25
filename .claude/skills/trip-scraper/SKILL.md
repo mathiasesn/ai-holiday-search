@@ -90,10 +90,8 @@ do not re-enumerate it here. Its results normalize into the same adapter result 
 
 ### Vertical selection (authoritative)
 
-**Query-driven, not always-on.** Where one source spans several verticals (`momondo-search`
-covers all three today — flights, stays, packages; `booking-search` covers two — stays and
-flights, no packages), `/scrape` runs only the verticals the traveler's request and profile
-actually call for — a flight-only query runs flights alone; a "week in Lisbon, flights and
+**Query-driven, not always-on.** Where one source spans several verticals, `/scrape` runs only
+the verticals the traveler's request and profile actually call for — a flight-only query runs flights alone; a "week in Lisbon, flights and
 hotel" query runs flights, stays, and packages. Name which verticals ran in the final output,
 and say plainly when one was skipped rather than letting it pass silently. When the request is
 ambiguous about which verticals are wanted, ask the user rather than running them all. This is
@@ -121,10 +119,8 @@ docstrings only summarize it and point back here):
 candidate record" below, which `trip-scraper` produces by merging one or more of these adapter
 records with destination/trip context for scoring.
 
-`trivago-search`, `momondo-search`, and `booking-search` results all normalize into this same
-record shape, with `source: "trivago-search"`, `source: "momondo-search"`, or `source:
-"booking-search"` respectively, even though they come from a browser read rather than a
-`--json` CLI call.
+Each browser-driven source normalizes into this same record shape, with `source` set to its own
+skill name, even though its results come from a browser read rather than a `--json` CLI call.
 
 ## Paste-a-listing fallback
 

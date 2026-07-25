@@ -15,9 +15,9 @@ bot-protected, so this is intentionally a Markdown procedure over a real browser
 portable Python adapter. No Python, no credentials, no env vars, no login, no booking, no
 payment, no Genius-account automation.
 
-booking.com covers **two verticals** relevant here — stays and flights — as parallel procedures
-inside this one skill. **There is no packages vertical**; see "Packages (verified absent)" below.
-Attractions and car hire are out of scope entirely (not `/scrape` source categories).
+booking.com covers **two verticals** relevant here — stays and flights; see "Vertical selection"
+below for how they run. There is no packages vertical (see "Packages (verified absent)"), and
+attractions and car hire are out of scope entirely (not `/scrape` source categories).
 
 All findings below were captured live against booking.com on **2026-07-25**, single session, via
 `claude-in-chrome`, Danish UI (`index.da.html`, `lang=da`), currency manually switched to **DKK**
@@ -327,4 +327,4 @@ third-party-operated subdomain whose fare rules aren't guaranteed to match what'
 - The DOM structure and the URL grammars above are expected to drift over time, since they were
   captured from a single live session on 2026-07-25 (see point-of-use guidance above for what to
   do when they do).
-- No packages vertical, no attractions, no car hire — out of scope per the spec.
+- No attractions, no car hire — out of scope.
