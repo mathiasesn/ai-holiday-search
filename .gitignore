@@ -1,0 +1,30 @@
+# Personal traveler profile, written by /setup — never commit real profile data
+profile/
+
+# Generated/personal state — keep only the .gitkeep placeholder tracked
+itineraries/*
+!itineraries/.gitkeep
+watchlist/*
+!watchlist/.gitkeep
+trip_scraper/*
+!trip_scraper/.gitkeep
+trip_tracker.csv
+
+# documents/ holds personal source material for /setup; keep only the
+# framework scaffolding tracked (README + folder placeholders).
+documents/*
+!documents/README.md
+!documents/past-trips/
+documents/past-trips/*
+!documents/past-trips/.gitkeep
+!documents/preferences/
+documents/preferences/*
+!documents/preferences/.gitkeep
+
+# Secrets / env
+.env
+*.key
+
+# Python
+__pycache__/
+.venv/

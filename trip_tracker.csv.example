@@ -1,0 +1,3 @@
+destination,dates,nights,source,price_per_person,currency,fit_score,status,watchlist,notes,url
+Lisbon, Portugal,2026-03-12 to 2026-03-17,5,flights-search+stays-search,612,EUR,88,shortlisted,yes,"Walkable, direct flight from CPH, matches relaxed-pace preference",https://example.com/listing/lisbon-mar
+Split, Croatia,2026-09-02 to 2026-09-09,7,packages-search,745,EUR,74,rejected,no,"Great price but no direct flight from BLL; connects via FRA (dealbreaker: direct flights only)",https://example.com/listing/split-sep

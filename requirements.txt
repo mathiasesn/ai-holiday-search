@@ -1,0 +1,3 @@
+# Everything else used by this project's tooling and search-source scripts is
+# Python 3.10+ standard library. requests is the one external dependency.
+requests
