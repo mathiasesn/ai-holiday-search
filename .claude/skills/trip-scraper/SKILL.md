@@ -21,9 +21,9 @@ Destinations, date windows, price ceiling, and sources queried by default live i
 For each configured source, run the adapter's CLI:
 
 ```
-python .agents/skills/flights-search/search.py --json <args>
-python .agents/skills/stays-search/search.py --json <args>
-python .agents/skills/packages-search/search.py --json <args>
+uv run .agents/skills/flights-search/search.py --json <args>
+uv run .agents/skills/stays-search/search.py --json <args>
+uv run .agents/skills/packages-search/search.py --json <args>
 ```
 
 - Each adapter is stdlib+`requests`, supports `--help`, and exits non-zero on failure.

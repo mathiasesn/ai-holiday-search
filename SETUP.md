@@ -5,7 +5,10 @@ This guide covers getting a fresh fork of **ai-holiday-search** running end to e
 ## Prerequisites
 
 - [Claude Code](https://claude.com/claude-code) (CLI)
-- Python 3.10+
+- [uv](https://docs.astral.sh/uv/) — install with `curl -LsSf https://astral.sh/uv/install.sh | sh`,
+  or via Homebrew/pipx/winget (see the
+  [installation guide](https://docs.astral.sh/uv/getting-started/installation/)). uv
+  provisions its own Python, so a system Python install is not required.
 - (Optional) `AMADEUS_API_KEY` and `AMADEUS_API_SECRET` — free-tier Amadeus Self-Service
   API credentials, used by `flights-search`. Without them, flight search falls back to
   Claude's web search.
@@ -25,10 +28,11 @@ cd ai-holiday-search
 ## 2. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
-This installs `requests`; everything else the tooling uses is Python standard library.
+This installs `requests` into a project-local virtualenv; everything else the tooling uses
+is Python standard library.
 
 ## 3. (Optional) Configure API keys
 

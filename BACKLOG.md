@@ -61,11 +61,14 @@ Kept here as a record because the contradiction — a gitignored directory with 
 tracked file inside it — is what `tools/security_guards.py` flagged, and is the
 kind of drift the guard exists to catch.
 
-### 6. Pin `requirements.txt`, enable Dependabot
+### 6. ~~Pin dependencies~~ — resolved; enable Dependabot still open
 
-`requests` is currently unpinned, so CI and a fresh fork can resolve different
-versions — a green CI run does not prove a forker's install works. Pin, then
-let Dependabot propose upgrades.
+Resolved: the project moved from `requirements.txt` to uv, with dependencies
+declared in `pyproject.toml` and pinned via a committed `uv.lock` — a green CI
+run now proves a forker's `uv sync` resolves the same versions.
+
+Still open: enable Dependabot (or an equivalent) to propose upgrades against
+`uv.lock`.
 
 ### 7. Shared adapter code (`.agents/skills/_common.py`)
 

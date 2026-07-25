@@ -33,7 +33,7 @@ availability.
 ## CLI invocation
 
 ```
-python .agents/skills/flights-search/search.py \
+uv run .agents/skills/flights-search/search.py \
   --origin CPH --destination BCN \
   --depart 2026-10-12 --return-date 2026-10-19 \
   --adults 2 --currency EUR --max-results 10 --json

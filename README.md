@@ -29,7 +29,10 @@ The framework encodes trip-planning best practices: structured fit criteria, rea
 ## Prerequisites
 
 - [Claude Code](https://claude.com/claude-code) (CLI)
-- Python 3.10+
+- [uv](https://docs.astral.sh/uv/) — install with `curl -LsSf https://astral.sh/uv/install.sh | sh`,
+  or via Homebrew/pipx/winget (see the
+  [installation guide](https://docs.astral.sh/uv/getting-started/installation/)). uv
+  provisions its own Python, so a system Python install is not required.
 - (Optional) API keys for flight/accommodation search — see [Search sources](#search-sources). Everything degrades gracefully to Claude's web search + paste-a-listing mode.
 
 ## Quick start
@@ -137,7 +140,9 @@ ai-holiday-search/
 │   ├── lint_skills.py                   # Validates SKILL.md/command frontmatter and cross-links
 │   └── security_guards.py               # Guards against committed secrets and personal-data leaks
 ├── .github/workflows/ci.yml             # CI: runs the lint and security guards on every push
-├── requirements.txt                     # Python dependencies (requests)
+├── pyproject.toml                       # Python project + dependency (requests) definition
+├── uv.lock                              # Locked dependency versions (committed)
+├── .python-version                      # Pinned Python version for uv
 └── SETUP.md                             # Detailed setup guide
 ```
 

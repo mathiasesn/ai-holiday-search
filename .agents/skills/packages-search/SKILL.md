@@ -31,7 +31,7 @@ Optional, and off by default. To wire up a real operator:
 ## CLI invocation
 
 ```
-python .agents/skills/packages-search/search.py \
+uv run .agents/skills/packages-search/search.py \
   --destination Antalya --depart-airport CPH \
   --depart 2026-10-12 --return-date 2026-10-19 \
   --adults 2 --currency EUR --max-results 10 --json

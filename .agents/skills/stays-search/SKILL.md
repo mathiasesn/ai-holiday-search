@@ -31,7 +31,7 @@ network call — see Fallback behavior below.
 ## CLI invocation
 
 ```
-python .agents/skills/stays-search/search.py \
+uv run .agents/skills/stays-search/search.py \
   --destination Lisbon \
   --check-in 2026-10-12 --check-out 2026-10-19 \
   --guests 2 --currency EUR --max-results 10 --json

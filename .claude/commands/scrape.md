@@ -33,7 +33,7 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 3. **Read search defaults.** Read `.claude/skills/trip-scraper/search-queries.md` for the default destination list, date windows, and which sources to query. Combine with the merged profile + steering constraints (home airports, budget, dates, max travel time, style, dealbreakers) to build the concrete query parameters for this run.
 
 4. **Invoke search adapters.** For each of `.agents/skills/flights-search/search.py`, `.agents/skills/stays-search/search.py`, `.agents/skills/packages-search/search.py`:
-   - Run it with `--json` and the query parameters from step 3, via `python <path>/search.py --json <args>`.
+   - Run it with `--json` and the query parameters from step 3, via `uv run <path>/search.py --json <args>`.
    - If the CLI exits with code 2 and prints a JSON object with `status == "no_credentials"` (the adapter protocol defined in `.claude/skills/trip-scraper/SKILL.md`), fall back to Claude's own web search for that source instead of failing the whole run — note in the final output which sources used the API vs. web-search fallback.
    - Collect all raw candidates from all three sources.
 
