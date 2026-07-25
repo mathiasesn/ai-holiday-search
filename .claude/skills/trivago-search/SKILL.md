@@ -56,7 +56,10 @@ already in hand (see "Fast path" below).
    "Recently viewed" properties and **prefills the search form with their previous search**
    (destination, dates, guest counts). Do not treat any of this as a search result. Overwrite
    every field explicitly rather than trusting what's prefilled — never submit on the assumption
-   a field already holds the right value.
+   a field already holds the right value. Never copy any recently-viewed property, prefilled
+   form value, or other observed account/browsing-history artifact into `details`, into any
+   result record, or into presented output — this holds even though `trip_scraper/` is
+   gitignored; the hazard is exposure to the user's own session, not git tracking.
 4. Type the destination into the search field. This opens an autocomplete dropdown — **you
    must click a suggestion; typing and submitting without clicking is not a valid search.**
    Ambiguous names return multiple options (a verified example: "Lisbon" returned Lisbon
@@ -72,11 +75,12 @@ already in hand (see "Fast path" below).
 
 ### Fast path: construct the URL directly (only with a known locationId)
 
-Skip the form only when the numeric `locationId` for the destination is already known — from
-earlier in this conversation, or recorded in `profile/search-queries.md` (gitignored, so it's a
-safe place to keep a bare numeric city ID; that ID alone is not personal data). Never fabricate
+Skip the form only when the numeric `locationId` for the destination is already known — either
+from earlier in this conversation, or already recorded by the traveler in
+`profile/search-queries.md` (gitignored — it may not exist in a fresh clone; read it, never write
+it). `/scrape` never writes `profile/` — only `/setup` does (per `ARCHI.md` §10). Never fabricate
 a `locationId` — a wrong one silently returns the wrong city. If the ID is not known, use the
-form path and consider recording the ID discovered afterward.
+form path; if the user wants the discovered ID persisted, tell them to add it via `/setup`.
 
 **Verified URL shape** (captured live against trivago.dk on 2026-07-25, for Lisbon):
 
@@ -143,9 +147,16 @@ three; read it for the full shapes and the dedupe/collapsing rules. Only the tri
 field mappings are given here:
 
 - `source`: literal `"trivago-search"`.
+- `title`: the hotel name from the card.
 - `price`: the **stay total**, read from the "kr N total" line (see price trap above) — never
   the per-night headline number.
-- `currency`: `"DKK"`.
+- `currency`: `"DKK"` — what the page reads. Per
+  `.claude/skills/holiday-planner/05-budget-rules.md` (EUR primary, DKK noted), also present a
+  EUR-converted figure and label it a **conversion estimate** (rate not pinned to a live source)
+  on top of the existing web-read-estimate label.
+- `price_per_person`: the stay total (`price` above) divided by the adult count used in the
+  search — the `<adults>` value from the `rc-<rooms>-<adults>` URL token. State this divisor
+  plainly wherever `price_per_person` is shown; never leave the divisor implied.
 - `dates`: `{"check_in": "<YYYY-MM-DD>", "check_out": "<YYYY-MM-DD>"}` from the search performed.
 - `details`: free-form — per-night price, star rating, review score/count, distance to city
   centre, deal provider, alternative provider prices, badges, amenity highlights.

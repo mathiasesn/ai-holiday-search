@@ -23,7 +23,7 @@ Known gaps, deferred decisions, and engineering debt are tracked in `BACKLOG.md`
 
 Two layers make up the system, and the balance between them is the single most important thing to understand:
 
-1. **The prompt/agent layer is the product.** Most of the repo's substance is Markdown that Claude Code reads as instructions: 5 slash commands, 3 Claude skills, and 6 numbered holiday-planner reference documents. Workflow logic — fit scoring math, pacing enforcement, the drafter–reviewer pipeline, budget rules, JSON state-file schemas — lives in prose and tables in these files, not in Python.
+1. **The prompt/agent layer is the product.** Most of the repo's substance is Markdown that Claude Code reads as instructions: 5 slash commands, 4 Claude skills, and 6 numbered holiday-planner reference documents. Workflow logic — fit scoring math, pacing enforcement, the drafter–reviewer pipeline, budget rules, JSON state-file schemas — lives in prose and tables in these files, not in Python.
 2. **The Python layer is thin support.** ~1,100 lines total, split between three near-standalone search adapters (`.agents/skills/*/search.py`) that wrap external APIs, and two repo-hygiene scripts (`tools/lint_skills.py`, `tools/security_guards.py`) that CI runs on every push.
 
 Architecturally, the flow is: `/setup` fills `profile/` from tracked templates → `/scrape` fans out to adapters (or falls back to web search), normalizes and deduplicates results, and scores them → `/plan` runs a 7-step drafter–reviewer pipeline producing a verified Markdown itinerary → `/watch` snapshots trips and re-checks prices over time.
@@ -71,7 +71,8 @@ ai-holiday-search/
 │   ├── skills/                     # Reference knowledge the commands load
 │   │   ├── holiday-planner/        # SKILL.md + 01-…-06-*.md: profile shape, scoring, pacing, budget, packing
 │   │   ├── trip-scraper/           # SKILL.md (adapter protocol + state schemas) + search-queries.md
-│   │   └── price-watch/            # SKILL.md: slug derivation, watchlist schema, re-check thresholds
+│   │   ├── price-watch/            # SKILL.md: slug derivation, watchlist schema, re-check thresholds
+│   │   └── trivago-search/         # SKILL.md: browser-driven stays source, no search.py, own fallback chain
 │   └── settings.local.json         # Per-user permissions; untracked — see BACKLOG item 4
 │
 ├── .agents/skills/                 # Agent-AGNOSTIC search adapters — designed to be copied out wholesale
@@ -209,6 +210,12 @@ On exit 2 with `--json`, the adapter prints **exactly one JSON object**:
 
 This is **distinct from** the "normalized candidate record" that `trip-scraper` builds by merging adapter records with destination/trip context before scoring.
 
+**Carve-out: a source may instead be browser-driven.** Not every source is a `.agents/skills/*`
+CLI adapter under the exit-code protocol above — `trivago-search` (`.claude/skills/`) is
+Markdown-only, has no `search.py` and no exit code, and defines its own multi-step fallback chain
+instead. The exit-code protocol above remains load-bearing and unchanged for CLI adapters; this
+carve-out only exempts browser-driven sources from it.
+
 ### Adding a new source
 
 Copy an existing adapter folder, rename it, update `SKILL.md` frontmatter `name` to match the new directory, point `search.py` at your API, keep the exit-code protocol and result-record shape exactly, add any new credential env vars to `ADAPTER_CRED_VARS` in the CI workflow and to `ALLOWED_ENV_VAR_NAMES` in `tools/security_guards.py`, and `chmod +x search.py`. Do not introduce a shared import.
@@ -267,7 +274,7 @@ Commands are procedure; skills are reference. A command file states its inputs, 
 | Command | Reads | Writes | Shape |
 |---|---|---|---|
 | `/setup` | `documents/`, `$ARGUMENTS`, holiday-planner templates | `profile/01…06-*.md`, `trip_tracker.csv` | 3 modes (documents / pasted text / interview), auto-detected; asks rather than picking silently; documents-mode is idempotent and merges |
-| `/scrape` | `profile/`, `search-queries.md`, adapters, `trip_scraper/seen.json` | `trip_scraper/seen.json` | Fan out → normalize → dedupe → score → present sorted by fit with per-criterion reasoning |
+| `/scrape` | `profile/`, `search-queries.md`, adapters, `trivago-search/SKILL.md`, `trip_scraper/seen.json` | `trip_scraper/seen.json` | Fan out (including a browser-driven `trivago-search` run via `claude-in-chrome` MCP tools, now in its `allowed-tools`) → normalize → dedupe → score → present sorted by fit with per-criterion reasoning |
 | `/plan` | `profile/`, holiday-planner 03/04/05 | `itineraries/<trip-slug>/itinerary.md` | 7 explicit steps, see below |
 | `/watch` | `watchlist/*.json`, adapters | `watchlist/<slug>.json` | `add` / `remove` / no-args re-check |
 | `/reset` | — | deletes `profile/`, `watchlist/`, `trip_tracker.csv` | Requires typing `RESET`; touches only gitignored state |

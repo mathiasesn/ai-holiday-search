@@ -23,7 +23,8 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 ## State touched
 - Reads: everything under Inputs above.
 - Writes: `trip_scraper/seen.json` (append newly seen candidates), and a results snapshot under `trip_scraper/` (e.g. `trip_scraper/results-<date>.json`) for this run's output.
-- Never edits `profile/` files.
+- Never writes or edits `profile/` files — only `/setup` does.
+- Opens a browser tab (via `claude-in-chrome`) on every run, for the `trivago-search` step.
 
 ## Steps
 
@@ -40,11 +41,10 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 
    Also run `trivago-search` as a second, first-class stays source, following
    `.claude/skills/trivago-search/SKILL.md`. It has no CLI and no exit code, so it can't fail this
-   way — instead, if the browser is unreachable, the Chrome extension isn't connected, site
-   permission is denied, the page can't be read, or a bot challenge appears, follow that skill's
-   own fallback chain (Claude web search with the same params, then ask the user to paste listing
-   text) rather than erroring out the run. The run must complete even when Chrome is unavailable.
-   Note in the final output which sources used a live source (API or browser) vs. a fallback.
+   way — instead it follows its own fallback chain, defined authoritatively in that skill's
+   `SKILL.md` (do not re-enumerate the triggers here). The run must complete even when Chrome is
+   unavailable. Note in the final output which sources used a live source (API or browser) vs. a
+   fallback.
 
 5. **Deduplicate.** Read `trip_scraper/seen.json` (if absent, treat it as `{"schema_version": 1, "entries": {}}` — when writing it for the first time, include `schema_version`). Derive each candidate's dedupe key exactly as specified in `.claude/skills/trip-scraper/SKILL.md` — that file is the authority on the key derivation and the file format; do not invent an ad hoc match. For each candidate:
    - If its key is **not** present in `entries`, it's genuinely new — keep it for scoring and presentation.

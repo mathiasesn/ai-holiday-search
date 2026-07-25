@@ -59,11 +59,10 @@ uv run .agents/skills/packages-search/search.py --json <args>
 `trivago-search` is a first-class stays source that runs on every `/scrape`, alongside (not
 instead of) `stays-search`. It has no `search.py`, no CLI invocation, and no exit code — it drives
 a real browser session per `.claude/skills/trivago-search/SKILL.md`, whose default driver is the
-`claude-in-chrome` MCP tools. It is therefore exempt from the exit-2 no-credentials
-protocol above; instead it has its own fallback chain (browser unreachable / extension not
-connected / site permission denied / page unreadable / bot challenge shown → Claude web search
-with the same params → ask the user to paste listing text). See that skill's `SKILL.md` for the
-full procedure. Every price it produces is a web-read estimate and must be labeled as such.
+`claude-in-chrome` MCP tools. It is therefore exempt from the exit-2 no-credentials protocol
+above; it has its own fallback chain instead — `.claude/skills/trivago-search/SKILL.md` is
+authoritative for the exact trigger list and order, do not re-enumerate it here. Every price it
+produces is a web-read estimate and must be labeled as such.
 
 ## Adapter result record (authoritative)
 
@@ -171,8 +170,13 @@ Because `trivago-search` is metasearch, it routinely surfaces the same property 
 `stays-search` also found, at a different price. This is separate from `seen.json` dedupe above
 (which is unchanged) — it happens at presentation time, after scoring: when the same property
 appears from both sources, collapse them into a single presented candidate showing the lower
-price and naming both sources (e.g. "also on stays-search at €812"). Every `trivago-search` price
-involved is a web-read estimate and must be labeled as such.
+price and naming both sources. `trivago-search` reads DKK, `stays-search` is typically EUR —
+**convert both to a common currency before comparing "lower"; never compare raw numbers in
+different currencies** (a DKK figure looks smaller than an EUR one at the same real price, ~7.5
+kr per euro, and would silently win every time). Name the other source in the collapsed entry —
+format example only, not a real or current price: "also on stays-search at €812". Every
+`trivago-search` price involved is a
+web-read estimate, and any currency conversion is itself an estimate (rate not pinned).
 
 ## Handing off to scoring
 
