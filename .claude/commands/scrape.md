@@ -37,11 +37,11 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
    - If the CLI exits non-zero reporting missing credentials (e.g. no `AMADEUS_API_KEY`), fall back to Claude's own web search for that source instead of failing the whole run — note in the final output which sources used the API vs. web-search fallback.
    - Collect all raw candidates from all three sources.
 
-5. **Deduplicate.** Read `trip_scraper/seen.json` (treat as empty list if absent). Drop candidates already recorded there (match on destination + dates + source + price, or the closest available key). Keep only genuinely new candidates for scoring and presentation.
+5. **Deduplicate.** Read `trip_scraper/seen.json` (if absent, treat it as `{"schema_version": 1, "entries": {}}`). Derive each candidate's dedupe key exactly as specified in `.claude/skills/trip-scraper/SKILL.md` — that file is the authority on the key derivation and the file format; do not invent an ad hoc match. Drop candidates whose key is already present, and keep only genuinely new ones for scoring and presentation.
 
 6. **Score each candidate.** Apply the scoring framework in `.claude/skills/holiday-planner/03-trip-evaluation.md` against the (merged) profile for every new candidate. Produce a fit score and the concrete reasoning behind it (which criteria it satisfies, which it violates, e.g. "fits budget and pace but exceeds max travel time by 40 minutes").
 
-7. **Present results.** Sort by fit score, descending. For each candidate show: destination, dates, price per person (state currency, EUR default), source, fit score, and the reasoning from step 6. Rank a cheaper trip that violates a dealbreak below a pricier one that fits — never let price alone determine order.
+7. **Present results.** Sort by fit score, descending. For each candidate show: destination, dates, price per person (state currency, EUR default), source, fit score, and the reasoning from step 6. Rank a cheaper trip that violates a dealbreaker below a pricier one that fits — never let price alone determine order.
 
 8. **Offer next actions.** After presenting the list, ask the user whether to:
    - Run `/plan <pick>` on one of the results, or
