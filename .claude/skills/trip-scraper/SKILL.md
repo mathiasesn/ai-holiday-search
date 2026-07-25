@@ -19,8 +19,9 @@ Destinations, date windows, price ceiling, and sources queried by default live i
 ## Fan-out to sources
 
 Stays are queried through every enabled stays source. Today that is the `stays-search` CLI
-adapter below, and `trivago-search`, a browser-driven skill (not a CLI adapter — see next
-section). Flights and packages only have the CLI adapters.
+adapter below, plus `trivago-search` and `momondo-search`, browser-driven skills (not CLI
+adapters — see next section). Flights and packages are queried through their CLI adapters plus
+`momondo-search`, which covers all three verticals.
 
 For each configured CLI-adapter source, run the adapter's CLI:
 
@@ -56,14 +57,31 @@ uv run .agents/skills/packages-search/search.py --json <args>
 
 ### Browser-driven sources (not exit-code adapters)
 
-A stays source may instead be browser-driven rather than a CLI adapter: it has no `search.py`,
+A source may instead be browser-driven rather than a CLI adapter: it has no `search.py`,
 no CLI invocation, and no exit code — it drives a real browser session, defines its own
 fallback chain instead of the exit-2 no-credentials protocol above, and normalizes its results
-into the same adapter result record. `trivago-search` is the one current instance: it runs on
+into the same adapter result record. `trivago-search` is one instance, stays-only: it runs on
 every `/scrape`, alongside (not instead of) `stays-search`, driving a session per
 `.claude/skills/trivago-search/SKILL.md` (whose default driver is the `claude-in-chrome` MCP
 tools) — that file is authoritative for its exact fallback trigger list and order, do not
 re-enumerate it here.
+
+`momondo-search` is the other current instance, and unlike `trivago-search` it spans **all
+three** verticals — flights, stays, and packages — as three parallel procedures inside one
+skill. It runs on every `/scrape`, alongside the CLI adapters, for whichever verticals the run
+calls for (see the query-driven vertical-selection rule below). It has its own fallback chain,
+authoritative in `.claude/skills/momondo-search/SKILL.md`; do not re-enumerate it here. Its
+results normalize into the same adapter result record with `source: "momondo-search"`, reading
+DKK — the same EUR conversion-estimate rule that applies to `trivago-search` (see
+"Normalization" in that skill and `.claude/skills/holiday-planner/05-budget-rules.md`) applies
+here too.
+
+**Vertical selection is query-driven, not always-on.** `/scrape` runs only the `momondo-search`
+verticals the traveler's request and profile actually call for — a flight-only query runs
+flights alone; a "week in Lisbon, flights and hotel" query runs flights, stays, and packages.
+Name which verticals ran in the final output, and say plainly when one was skipped rather than
+letting it pass silently. When the request is ambiguous about which verticals are wanted, ask
+the user rather than silently running all three.
 
 ## Adapter result record (authoritative)
 
@@ -165,21 +183,28 @@ dedupe_key = sha256(f"{source}|{destination_slug}|{depart_date}|{return_date}|{p
 - If `trip_scraper/seen.json` doesn't exist yet, create it with `schema_version: 1` and an
   empty `entries` object, then populate it.
 
-## Cross-source duplicate collapsing (presentation only)
+## Cross-source duplicate presentation (presentation and ranking only)
 
 This is separate from `seen.json` dedupe above (which is unchanged) — it happens at
-presentation time, after scoring: whenever the same property is surfaced by more than one
-enabled source, at a different price, collapse them into a single presented candidate showing
-the lower price and naming all sources involved. A future third source inherits this rule
-automatically; it is not specific to any one pair of sources.
+presentation time, after scoring: whenever the same underlying property or itinerary is
+surfaced by more than one enabled source, at a different price, **both rows are shown
+separately** — each with its own price and `source` — visibly grouped or marked as the same
+underlying property, with the price gap noted as further evidence both figures are estimates.
+This supersedes any earlier "collapse into one row" behavior; do not merge the rows away.
 
-Example: `trivago-search` reads DKK, `stays-search` is typically EUR — **convert both to a
-common currency before comparing "lower"; never compare raw numbers in different currencies**
-(a DKK figure looks smaller than an EUR one at the same real price and would silently win every
-time; see `.claude/skills/holiday-planner/05-budget-rules.md` for the conversion/labeling
-policy). Name the other source in the collapsed entry — format example only, not a real or
-current price: "also on stays-search at €812". Any currency conversion is itself an estimate
-(rate not pinned), on top of `trivago-search`'s existing web-read-estimate label.
+Critically, the linked rows are **one candidate presented with two quotes, not two
+candidates**: it is scored and ranked **once**, using the **lower** of the two prices. A future
+third source inherits this rule automatically; it is not specific to any one pair of sources.
+
+Example: `trivago-search` and `momondo-search` both read DKK, `stays-search` is typically EUR —
+**convert to a common currency before comparing "lower"; never compare raw numbers in different
+currencies** (a DKK figure looks smaller than an EUR one at the same real price and would
+silently win every time; see `.claude/skills/holiday-planner/05-budget-rules.md` for the
+conversion/labeling policy). Name both sources on their respective rows — format example only,
+not a real or current price: "trivago-search: kr 8,778" shown grouped with "momondo-search: kr
+9,150 — same property, price gap likely fees/timing; both are estimates", scored once at the
+lower (trivago) figure. Any currency conversion is itself an estimate (rate not pinned), on top
+of each source's existing web-read-estimate label.
 
 ## Handing off to scoring
 

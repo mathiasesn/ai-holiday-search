@@ -74,7 +74,8 @@ ai-holiday-search/
 │   │   ├── holiday-planner/        # SKILL.md + 01-…-06-*.md: profile shape, scoring, pacing, budget, packing
 │   │   ├── trip-scraper/           # SKILL.md (adapter protocol + state schemas) + search-queries.md
 │   │   ├── price-watch/            # SKILL.md: slug derivation, watchlist schema, re-check thresholds
-│   │   └── trivago-search/         # SKILL.md: browser-driven stays source, no search.py, own fallback chain
+│   │   ├── trivago-search/         # SKILL.md: browser-driven stays source, no search.py, own fallback chain
+│   │   └── momondo-search/         # SKILL.md: browser-driven flights/stays/packages source, no search.py, own fallback chain
 │   └── settings.local.json         # Per-user permissions; untracked — see BACKLOG item 4
 │
 ├── .agents/skills/                 # Agent-AGNOSTIC search adapters — designed to be copied out wholesale
@@ -212,7 +213,7 @@ On exit 2 with `--json`, the adapter prints **exactly one JSON object**:
 
 This is **distinct from** the "normalized candidate record" that `trip-scraper` builds by merging adapter records with destination/trip context before scoring.
 
-**Carve-out: a source may instead be browser-driven** (like `trivago-search`, `.claude/skills/`, Markdown-only, no `search.py`/exit code, its own fallback chain) — the exit-code protocol above remains load-bearing and unchanged for CLI adapters; this only exempts browser-driven sources from it.
+**Carve-out: a source may instead be browser-driven** (like `trivago-search` and `momondo-search`, `.claude/skills/`, Markdown-only, no `search.py`/exit code, its own fallback chain) — the exit-code protocol above remains load-bearing and unchanged for CLI adapters; this only exempts browser-driven sources from it. `momondo-search` differs from `trivago-search` in covering three verticals (flights, stays, packages) as three parallel procedures in one skill, rather than stays only.
 
 ### Adding a new source
 
@@ -257,6 +258,7 @@ User types /scrape
        → .claude/skills/trip-scraper/    (fan-out rules, adapter protocol, dedupe, schemas)
            → .agents/skills/*/search.py       (the network call, or exit 2 → web-search fallback)
            → .claude/skills/trivago-search/   (browser read, or own fallback chain → web search)
+           → .claude/skills/momondo-search/   (browser read across flights/stays/packages, or own fallback chain → web search)
        → .claude/skills/holiday-planner/03-trip-evaluation.md  (scoring + ranking)
        → profile/*.md                     (the traveler's real data; must exist)
 ```
@@ -275,7 +277,7 @@ Commands are procedure; skills are reference. A command file states its inputs, 
 | Command | Reads | Writes | Shape |
 |---|---|---|---|
 | `/setup` | `documents/`, `$ARGUMENTS`, holiday-planner templates | `profile/01…06-*.md`, `trip_tracker.csv` | 3 modes (documents / pasted text / interview), auto-detected; asks rather than picking silently; documents-mode is idempotent and merges |
-| `/scrape` | `profile/`, `search-queries.md`, adapters, `trivago-search/SKILL.md`, `trip_scraper/seen.json` | `trip_scraper/seen.json` | Fan out (including a browser-driven `trivago-search` run via `claude-in-chrome` MCP tools, in its `allowed-tools`) → normalize → dedupe → score → present sorted by fit with per-criterion reasoning |
+| `/scrape` | `profile/`, `search-queries.md`, adapters, `trivago-search/SKILL.md`, `momondo-search/SKILL.md`, `trip_scraper/seen.json` | `trip_scraper/seen.json` | Fan out (including browser-driven `trivago-search` and `momondo-search` runs via `claude-in-chrome` MCP tools, in its `allowed-tools`; `momondo-search` covers whichever of flights/stays/packages the run calls for) → normalize → dedupe → score → present sorted by fit with per-criterion reasoning |
 | `/plan` | `profile/`, holiday-planner 03/04/05 | `itineraries/<trip-slug>/itinerary.md` | 7 explicit steps, see below |
 | `/watch` | `watchlist/*.json`, adapters | `watchlist/<slug>.json` | `add` / `remove` / no-args re-check |
 | `/reset` | — | deletes `profile/`, `watchlist/`, `trip_tracker.csv` | Requires typing `RESET`; touches only gitignored state |

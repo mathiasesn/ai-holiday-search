@@ -39,6 +39,7 @@
 | stays-search        | yes                 |
 | packages-search     | yes, if configured for your local operators |
 | trivago-search      | yes (needs an attended browser session; else degrades to web search) |
+| momondo-search      | yes, for the verticals your request/profile call for (flights + stays + packages; browser-driven, needs an attended browser session; else degrades to web search) |
 
 ## Home airport(s)
 

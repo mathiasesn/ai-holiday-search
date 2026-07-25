@@ -18,6 +18,7 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 - `.claude/skills/holiday-planner/03-trip-evaluation.md` — scoring framework.
 - `.agents/skills/{flights-search,stays-search,packages-search}/search.py` — search adapters.
 - `.claude/skills/trivago-search/SKILL.md` — browser-driven trivago.dk stays source.
+- `.claude/skills/momondo-search/SKILL.md` — browser-driven momondo.dk source covering flights, stays, and packages.
 - `trip_scraper/seen.json` — previously seen candidates, for deduplication.
 
 ## State touched
@@ -26,6 +27,8 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 - Never writes or edits `profile/` files — only `/setup` does.
 - Opens a browser tab (via `claude-in-chrome`) for the `trivago-search` step, but only on runs
   whose resolved query has a stay component (not on flights-only or packages-only runs).
+- Also opens a browser tab (via `claude-in-chrome`) for the `momondo-search` step, covering
+  whichever of flights/stays/packages the resolved query calls for — see step 4 below.
 
 ## Steps
 
@@ -48,6 +51,15 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
    when Chrome is unavailable. Note in the final output which sources used a live source (API or
    browser) vs. a fallback.
 
+   Also run `momondo-search` as a first-class source across whichever of flights/stays/packages
+   the resolved query calls for, following `.claude/skills/momondo-search/SKILL.md`. Like
+   `trivago-search`, it has no CLI and no exit code — it follows its own fallback chain, defined
+   authoritatively in that skill's `SKILL.md` (do not re-enumerate the triggers here). Vertical
+   selection is query-driven, not always-on: run only the verticals the traveler's request and
+   profile call for, name which verticals ran in the final output, say plainly when one was
+   skipped, and ask rather than silently running all three when the request is ambiguous. The run
+   must complete even when Chrome is unavailable.
+
 5. **Deduplicate.** Read `trip_scraper/seen.json` (if absent, treat it as `{"schema_version": 1, "entries": {}}` — when writing it for the first time, include `schema_version`). Derive each candidate's dedupe key exactly as specified in `.claude/skills/trip-scraper/SKILL.md` — that file is the authority on the key derivation and the file format; do not invent an ad hoc match. For each candidate:
    - If its key is **not** present in `entries`, it's genuinely new — keep it for scoring and presentation.
    - If its key **is** present but the price has moved into a new price bucket, it's a legitimate price-change re-surface — keep it for scoring and presentation too (do not silently drop it).
@@ -55,7 +67,7 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 
 6. **Score each candidate.** Apply the scoring framework in `.claude/skills/holiday-planner/03-trip-evaluation.md` against the (merged) profile for every new candidate. Produce a fit score and the concrete reasoning behind it (which criteria it satisfies, which it violates, e.g. "fits budget and pace but exceeds max travel time by 40 minutes").
 
-7. **Present results.** Sort by fit score, descending. For each candidate show: destination, dates, price per person (state currency, EUR default), source, fit score, and the reasoning from step 6. Rank a cheaper trip that violates a dealbreaker below a pricier one that fits — never let price alone determine order. Where the same property was surfaced by more than one enabled source, collapse it into one entry showing the lower price and naming all sources involved, per `.claude/skills/trip-scraper/SKILL.md`.
+7. **Present results.** Sort by fit score, descending. For each candidate show: destination, dates, price per person (state currency, EUR default), source, fit score, and the reasoning from step 6. Rank a cheaper trip that violates a dealbreaker below a pricier one that fits — never let price alone determine order. Where the same property was surfaced by more than one enabled source, show both rows separately, each with its own price and source, visibly grouped as the same property, and score/rank it once using the lower of the two prices — per `.claude/skills/trip-scraper/SKILL.md`.
 
 8. **Offer next actions.** After presenting the list, ask the user whether to:
    - Run `/plan <pick>` on one of the results, or
