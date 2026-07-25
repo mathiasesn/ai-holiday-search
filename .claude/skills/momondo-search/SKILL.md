@@ -19,13 +19,11 @@ Unlike `trivago-search` (stays only), momondo.dk exposes four verticals on its h
 skill covers **flights, stays, and packages** as three parallel procedures. **Cars are never
 run** — out of scope per the spec.
 
-## Vertical selection is query-driven, not always-on
+## Vertical selection
 
-Run only the verticals the traveler's request and profile actually call for — a flight-only
-query runs flights alone; a "week in Lisbon, flights and hotel" query runs flights, stays, and
-packages. Always state explicitly which verticals ran this call, and say plainly when one was
-skipped so the user can ask for it. When the request is ambiguous about which verticals are
-wanted, ask the user rather than silently running all three.
+Which of the three verticals run is **query-driven, not always-on** — the rule is authoritative
+in `.claude/skills/trip-scraper/SKILL.md` ("Vertical selection"); do not restate it here. This
+skill's obligation under it: run only the verticals it was asked for, and name which ones ran.
 
 The three verticals share **one browser session and one permission/connection check per run**
 (checked once, not once per vertical). Each vertical then falls back **independently** through
@@ -43,14 +41,11 @@ tool failures on any step, stop retrying and drop to that vertical's fallback ch
 |---|---|
 | Open a results page for known params | `navigate` to the constructed URL |
 | Fill and drive a search form | `form_input` (fields), `computer` (clicks: autocomplete suggestion, calendar days, checkboxes, Søg) |
-| Enumerate result cards | `find` (see "Reading result cards" per vertical below) |
+| Enumerate result cards, and detect a bot challenge / dead end | `find` (see "Reading result cards (all verticals)" below) |
 | Read a page's structure/text | `read_page`; `get_page_text` for a single card only |
-| Detect a bot challenge / dead end | `read_page` or `get_page_text` on the loaded page |
 
-**Substitutable driver.** A Playwright-MCP-backed driver could satisfy the same capability table
-above and would additionally enable *unattended* `/watch` re-checks, which `claude-in-chrome`
-cannot do (it needs an attended user session and site permission). That procedure is out of
-scope here — this is a note recording a deliberate design decision, not a spec for it.
+**Substitutable driver.** The Playwright-MCP substitution note in
+`.claude/skills/trivago-search/SKILL.md` ("Driver model") applies here unchanged.
 
 ## Privacy hazard — read before driving any form
 
@@ -83,6 +78,16 @@ This applies to all three verticals below.
   re-sort as they stream in). Wait for it to finish before reading cards, or the cheapest price
   read will be wrong.
 
+## Reading result cards (all verticals)
+
+Use `find` to enumerate result cards; fall back to `read_page` only if `find` returns nothing —
+don't run both by default, that costs a redundant full-page read per vertical. **Never
+`get_page_text` to enumerate** — it under-reports a list. `find`'s result is also the
+bot-challenge check for that page load: if it comes back empty or challenge-shaped, that is the
+signal to fall back, so no separate detection read is needed. Ignore `Annonce`-marked cards.
+
+Each vertical's own section below lists only the fields to extract and its price trap.
+
 All URL grammars, price traps, and page behaviors documented below were captured live against
 momondo.dk on **2026-07-25**, from a single live session, and may drift — see "Limits and
 etiquette".
@@ -109,15 +114,13 @@ drive the form instead (`https://www.momondo.dk/flight-search` or the `Fly` tab,
 origin/destination/dates/travellers, being careful to overwrite any prefill per the privacy
 hazard above) if the trip needs either of those.
 
-### Reading result cards
+### Card fields
 
 Result header tabs read `Billigst` / `Bedst` / `Hurtigst`, each showing a price + duration. A
-results count reads like `240 af 240 fly`. Use `find` to enumerate flight result cards; fall
-back to `read_page` only if `find` returns nothing. **Never `get_page_text` to enumerate** — it
-under-reports a list.
+results count reads like `240 af 240 fly`.
 
 Per card, extract: carriers, stops, layover durations, total duration, fare brand, booking
-provider, baggage note, and the price (see trap below). Ignore `Annonce`-marked cards.
+provider, baggage note, and the price (see trap below).
 
 ### Price trap (verified)
 
@@ -156,12 +159,11 @@ rule — this is in-conversation only, never written to `profile/`.
 **Disambiguation hazard (verified):** typing a city name can resolve to the *airport* instead of
 the city — the verification run resolved "Lissabon" to `Lissabon Humberto Delgado Lufthavn
 (LIS)`. Check what the form actually resolved to before trusting results; ask the user when
-ambiguous.
+ambiguous. Resolve a given destination **once per run**: once the user has confirmed which
+match is intended, reuse that answer for the other verticals in the same run rather than
+re-asking or re-disambiguating per vertical.
 
-### Reading result cards
-
-Use `find` to enumerate stay cards; fall back to `read_page` only if `find` returns nothing.
-Never `get_page_text` to enumerate. Ignore `Annonce`-marked cards.
+### Card fields
 
 Per card, extract: hotel name, `N km fra centrum`, review score + label + count (e.g. `8,8 Meget
 god (4460)`), star rating, the main provider offer (e.g. `Booking.com 1.159 kr.`) with its `Se
@@ -209,11 +211,9 @@ https://www.momondo.dk/packages/Lissabon-LIS-ALIS/2026-09-14/2026-09-19/-1,-1/2/
 Because two segments are unverified, **prefer the form path** and treat this URL as
 observed-not-understood — don't construct it from scratch for a new destination.
 
-### Reading result cards
+### Card fields
 
-Use `find` to enumerate package cards; fall back to `read_page` only if `find` returns nothing.
-Never `get_page_text` to enumerate. Ignore `Annonce`-marked cards. A results count reads like
-`617 resultater`.
+A results count reads like `617 resultater`.
 
 Per card, extract: hotel name, city, review score + count, star rating, the `Pakker` label,
 board basis (e.g. `Morgenmad`), booking provider (e.g. `Travellink`), one flight line (e.g.

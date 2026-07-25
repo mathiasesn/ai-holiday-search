@@ -76,12 +76,16 @@ DKK — the same EUR conversion-estimate rule that applies to `trivago-search` (
 "Normalization" in that skill and `.claude/skills/holiday-planner/05-budget-rules.md`) applies
 here too.
 
-**Vertical selection is query-driven, not always-on.** `/scrape` runs only the `momondo-search`
-verticals the traveler's request and profile actually call for — a flight-only query runs
-flights alone; a "week in Lisbon, flights and hotel" query runs flights, stays, and packages.
-Name which verticals ran in the final output, and say plainly when one was skipped rather than
-letting it pass silently. When the request is ambiguous about which verticals are wanted, ask
-the user rather than silently running all three.
+### Vertical selection (authoritative)
+
+**Query-driven, not always-on.** Where one source spans several verticals (`momondo-search`
+covers all three today), `/scrape` runs only the verticals the traveler's request and profile
+actually call for — a flight-only query runs flights alone; a "week in Lisbon, flights and
+hotel" query runs flights, stays, and packages. Name which verticals ran in the final output,
+and say plainly when one was skipped rather than letting it pass silently. When the request is
+ambiguous about which verticals are wanted, ask the user rather than running them all. This is
+the single authority for the rule — source skills and `/scrape` point here rather than
+restating it.
 
 ## Adapter result record (authoritative)
 

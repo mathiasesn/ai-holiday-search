@@ -148,8 +148,7 @@ This skill does not define the adapter result record, the normalized candidate r
 `trip_scraper/seen.json` — `.claude/skills/trip-scraper/SKILL.md` is authoritative for all
 three; read it for the full shapes and the dedupe rules, plus the cross-source duplicate
 presentation rule (present-both-rows, score-once) for when the same property also surfaces via
-another source such as `momondo-search`. Only the trivago-specific field mappings are given
-here:
+another enabled source. Only the trivago-specific field mappings are given here:
 
 - `source`: literal `"trivago-search"`.
 - `title`: the hotel name from the card.

@@ -54,11 +54,9 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
    Also run `momondo-search` as a first-class source across whichever of flights/stays/packages
    the resolved query calls for, following `.claude/skills/momondo-search/SKILL.md`. Like
    `trivago-search`, it has no CLI and no exit code — it follows its own fallback chain, defined
-   authoritatively in that skill's `SKILL.md` (do not re-enumerate the triggers here). Vertical
-   selection is query-driven, not always-on: run only the verticals the traveler's request and
-   profile call for, name which verticals ran in the final output, say plainly when one was
-   skipped, and ask rather than silently running all three when the request is ambiguous. The run
-   must complete even when Chrome is unavailable.
+   authoritatively in that skill's `SKILL.md` (do not re-enumerate the triggers here). Which of
+   its verticals run is governed by the "Vertical selection" rule in
+   `.claude/skills/trip-scraper/SKILL.md`. The run must complete even when Chrome is unavailable.
 
 5. **Deduplicate.** Read `trip_scraper/seen.json` (if absent, treat it as `{"schema_version": 1, "entries": {}}` — when writing it for the first time, include `schema_version`). Derive each candidate's dedupe key exactly as specified in `.claude/skills/trip-scraper/SKILL.md` — that file is the authority on the key derivation and the file format; do not invent an ad hoc match. For each candidate:
    - If its key is **not** present in `entries`, it's genuinely new — keep it for scoring and presentation.

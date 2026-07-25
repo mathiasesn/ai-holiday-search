@@ -213,7 +213,7 @@ On exit 2 with `--json`, the adapter prints **exactly one JSON object**:
 
 This is **distinct from** the "normalized candidate record" that `trip-scraper` builds by merging adapter records with destination/trip context before scoring.
 
-**Carve-out: a source may instead be browser-driven** (like `trivago-search` and `momondo-search`, `.claude/skills/`, Markdown-only, no `search.py`/exit code, its own fallback chain) — the exit-code protocol above remains load-bearing and unchanged for CLI adapters; this only exempts browser-driven sources from it. `momondo-search` differs from `trivago-search` in covering three verticals (flights, stays, packages) as three parallel procedures in one skill, rather than stays only.
+**Carve-out: a source may instead be browser-driven** (lives in `.claude/skills/`, Markdown-only, no `search.py`/exit code, its own fallback chain) — the exit-code protocol above remains load-bearing and unchanged for CLI adapters; this only exempts browser-driven sources from it. Such a source may cover one vertical or several, in which case which verticals run is query-driven per the "Vertical selection" rule in `.claude/skills/trip-scraper/SKILL.md`; the current instances are listed in the directory tree above.
 
 ### Adding a new source
 
