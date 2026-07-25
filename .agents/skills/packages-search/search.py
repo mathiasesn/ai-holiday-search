@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["requests"]
+# ///
 """packages-search — WORKING TEMPLATE for package/charter holiday operators.
 
 This is a fork-and-fill template, not a live integration: no package operator
@@ -178,7 +182,7 @@ def main(argv=None):
     try:
         import requests
     except ImportError:
-        sys.stderr.write("packages-search: the 'requests' package is required (pip install -r requirements.txt)\n")
+        sys.stderr.write("packages-search: the 'requests' package is required (run via 'uv run search.py', which installs it automatically)\n")
         return FAILURE_EXIT
 
     api_url, api_key = config
