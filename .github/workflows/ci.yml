@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-guards:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint skills and commands
+        run: python tools/lint_skills.py
+
+      - name: Run security guards
+        run: python tools/security_guards.py
+
+      - name: Smoke-test search adapters --help (no credentials in environment)
+        run: |
+          set -e
+          for f in .agents/skills/*/search.py; do
+            echo "Running: $f --help"
+            env -u AMADEUS_API_KEY -u AMADEUS_API_SECRET -u STAYS_API_URL -u STAYS_API_KEY -u PACKAGES_API_URL -u PACKAGES_API_KEY \
+              python "$f" --help
+          done
