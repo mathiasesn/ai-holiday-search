@@ -5,6 +5,9 @@ personal travel data** — your actual traveler profile lives in the gitignored 
 folder, written by `/setup`. This file is tracked in git and shared by everyone who forks
 this template.
 
+Read `ARCHI.md` before making changes — it is the architecture source of truth (structure,
+stack, conventions). This file remains the authority on behavior.
+
 ## Before `/setup` has been run
 
 If `profile/` does not exist yet, treat this as a fresh checkout:
