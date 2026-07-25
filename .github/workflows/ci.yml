@@ -11,21 +11,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements.txt
+          enable-cache: true
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: uv sync
 
       - name: Lint skills and commands
-        run: python tools/lint_skills.py
+        run: uv run python tools/lint_skills.py
 
       - name: Run security guards
-        run: python tools/security_guards.py
+        run: uv run python tools/security_guards.py
 
   adapter-smoke:
     runs-on: ubuntu-latest
@@ -36,15 +34,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: requirements.txt
+          enable-cache: true
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Smoke-test search adapters --help (no credentials in environment)
         run: |
@@ -52,5 +48,49 @@ jobs:
           for f in .agents/skills/*/search.py; do
             echo "Running: $f --help"
             env -u AMADEUS_API_KEY -u AMADEUS_API_SECRET -u STAYS_API_URL -u STAYS_API_KEY -u PACKAGES_API_URL -u PACKAGES_API_KEY \
-              python "$f" --help
+              uv run --python ${{ matrix.python-version }} "$f" --help
           done
+
+      - name: Verify matrix Python version actually ran
+        run: |
+          set -e
+          resolved="$(uv run --python ${{ matrix.python-version }} python -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')"
+          echo "Resolved interpreter: $resolved (expected ${{ matrix.python-version }})"
+          if [ "$resolved" != "${{ matrix.python-version }}" ]; then
+            echo "::error::uv resolved Python $resolved instead of matrix version ${{ matrix.python-version }} (check .python-version override)"
+            exit 1
+          fi
+
+  standalone-adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Copy one adapter folder outside the repo checkout
+        run: |
+          set -e
+          adapter_dir="$(dirname "$(ls .agents/skills/*/search.py | head -n1)")"
+          tmp_dir="$(mktemp -d)"
+          cp -r "$adapter_dir"/. "$tmp_dir"/
+          echo "STANDALONE_DIR=$tmp_dir" >> "$GITHUB_ENV"
+
+      - name: Assert no repo/venv/pyproject.toml present in standalone copy
+        run: |
+          set -e
+          if [ -f "$STANDALONE_DIR/pyproject.toml" ] || [ -d "$STANDALONE_DIR/.venv" ] || [ -d "$STANDALONE_DIR/.git" ]; then
+            echo "::error::standalone adapter copy unexpectedly contains repo/venv/pyproject.toml"
+            exit 1
+          fi
+
+      - name: Run standalone adapter --help via uv (PEP 723 inline metadata)
+        run: |
+          set -e
+          cd "$STANDALONE_DIR"
+          env -u AMADEUS_API_KEY -u AMADEUS_API_SECRET -u STAYS_API_URL -u STAYS_API_KEY -u PACKAGES_API_URL -u PACKAGES_API_KEY \
+            uv run search.py --help
