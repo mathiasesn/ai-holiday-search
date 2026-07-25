@@ -36,7 +36,9 @@ Determine which form `$ARGUMENTS` takes:
 If it's pasted text, extract destination, dates or date window, nights, price if stated, and any included inclusions (flights, transfers, board basis). If neither a clear destination nor usable pasted content is present, ask the user to clarify before continuing.
 
 ## Step 2 — Evaluate fit
-Load the full profile (`profile/01-traveler-profile.md` … `06-packing-and-prep.md`). Score the parsed destination/listing against the profile using `.claude/skills/holiday-planner/03-trip-evaluation.md` — style, budget, travel time, season, group needs, dealbreakers.
+Load the full profile (`profile/01-traveler-profile.md` … `06-packing-and-prep.md`). If `profile/` doesn't exist or any file still contains `<!-- FILL IN -->` markers, stop and tell the user to run `/setup` first — do not proceed with a partial profile.
+
+Score the parsed destination/listing against the profile using `.claude/skills/holiday-planner/03-trip-evaluation.md` — style, budget, travel time, season, group needs, dealbreakers.
 
 **If it's a poor match, say so honestly and up front**, before drafting anything: name the specific violated criteria (e.g. "exceeds your stated max travel time by 3h", "no direct flights and you flagged that as a dealbreaker"). Ask the user whether to proceed anyway, adjust the request, or stop. Only continue to Step 3 once the user confirms they want to proceed (or the fit is clearly good).
 

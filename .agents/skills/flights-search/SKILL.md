@@ -20,7 +20,14 @@ availability.
 2. Set two environment variables locally (never commit these):
    - `AMADEUS_API_KEY`
    - `AMADEUS_API_SECRET`
-3. No credentials needed to run `--help`, and no crash occurs if they're unset —
+3. (Optional) Set `AMADEUS_HOSTNAME` to select which Amadeus API host to call:
+   - `test` (default if unset) — the test/sandbox host, `test.api.amadeus.com`.
+   - `production` — the production host, `api.amadeus.com` (requires production
+     credentials, not test/sandbox ones).
+   - Any other value is used verbatim as a full hostname (e.g. a self-hosted proxy).
+   - Using test-environment credentials against `production` (or vice versa) is a
+     common cause of `401` errors — check `AMADEUS_HOSTNAME` matches your credential type.
+4. No credentials needed to run `--help`, and no crash occurs if they're unset —
    see Fallback behavior below.
 
 ## CLI invocation

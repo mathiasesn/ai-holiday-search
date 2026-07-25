@@ -65,7 +65,7 @@ Every result, regardless of source, is normalized to this shape before scoring:
 ```
 
 `price`/`currency`/`per_person` follow the currency handling rules in
-`holiday-planner/05-budget-rules.md`. `url` is omitted (or `null`) for pasted listings without a
+`.claude/skills/holiday-planner/05-budget-rules.md`. `url` is omitted (or `null`) for pasted listings without a
 link.
 
 ## Deduplication against trip_scraper/seen.json
@@ -114,5 +114,5 @@ dedupe_key = sha256(f"{source}|{destination_slug}|{depart_date}|{return_date}|{p
 ## Handing off to scoring
 
 Once deduplicated, pass the normalized candidate list to the fit-scoring framework in
-`holiday-planner/03-trip-evaluation.md`, sorted by score descending, each with its reasoning
+`.claude/skills/holiday-planner/03-trip-evaluation.md`, sorted by score descending, each with its reasoning
 shown per the format in that file.

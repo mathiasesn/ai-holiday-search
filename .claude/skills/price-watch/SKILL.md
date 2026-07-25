@@ -61,7 +61,7 @@ If the same destination/dates are watched from two different sources, append a s
   changed afterward — it's the baseline every later check compares against.
 - `price_history` gets a new entry appended on every `/watch` re-check (including the very
   first one, which duplicates `original_snapshot`). Never overwrite or drop earlier entries.
-- `trip` mirrors the normalized candidate record fields from `trip-scraper/SKILL.md` needed to
+- `trip` mirrors the normalized candidate record fields from `.claude/skills/trip-scraper/SKILL.md` needed to
   re-run the same search: source, route, dates, url.
 
 ## Adding a trip (`/watch add`)

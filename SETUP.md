@@ -39,6 +39,16 @@ export AMADEUS_API_KEY=your_key_here
 export AMADEUS_API_SECRET=your_secret_here
 ```
 
+By default the adapter calls Amadeus's test/sandbox host. If you have production
+credentials, also set:
+
+```bash
+export AMADEUS_HOSTNAME=production   # or a full hostname; defaults to the test host
+```
+
+Mismatching credential type and `AMADEUS_HOSTNAME` (e.g. production credentials against
+the test host) is a common cause of `401` errors — make sure they match.
+
 Never commit these — put them in your shell profile or a local `.env` file (already
 gitignored), not in any tracked file.
 

@@ -1,7 +1,7 @@
 ---
 description: Save trips to a price watchlist and re-check them for price drops, rises, or sold-out status
 argument-hint: "add <trip> | remove <trip> | (no args: re-check all watched trips)"
-allowed-tools: Read, Write, Bash, Glob
+allowed-tools: Read, Write, Bash, Glob, WebSearch, WebFetch
 ---
 
 # /watch — Price tracking
@@ -23,11 +23,14 @@ Snapshot trips found via `/scrape` or `/plan` into a local watchlist, then re-ch
 - Reads/writes: `watchlist/<slug>.json` (one per trip; created, updated, or deleted).
 - Never touches `profile/` or `trip_scraper/`.
 
+## Before anything else
+If this run needs profile data (e.g. resolving `<trip>` against profile-derived context, or any currency/preference defaults), check `profile/` first. If `profile/` doesn't exist or any file still contains `<!-- FILL IN -->` markers, stop and tell the user to run `/setup` first — do not proceed with a partial profile.
+
 ## Subcommands
 
 ### `/watch add <trip>`
 1. Identify the trip: use `<trip>` to match a recent `/scrape` result or the destination/dates from a just-completed `/plan` run. If ambiguous, ask the user which trip they mean.
-2. Derive a slug (e.g. `lisbon-2026-03`) from destination + date window.
+2. Derive a slug per `.claude/skills/price-watch/SKILL.md` — the authoritative source for slug derivation: `{destination}-{depart_date}-{return_date}` (e.g. `porto-portugal-2026-10-14-2026-10-19`), appending a short source tag if the same destination/dates are watched from two different sources.
 3. Read `.claude/skills/price-watch/SKILL.md` for the exact JSON shape expected in `watchlist/<slug>.json` and follow it precisely — at minimum it must capture: destination, dates, source, the snapshot price and currency, the search parameters needed to re-run the same query, and a price history array seeded with this first entry (timestamp + price).
 4. Write `watchlist/<slug>.json`. If a file for that slug already exists, ask before overwriting.
 5. Confirm to the user what was saved and under which slug.

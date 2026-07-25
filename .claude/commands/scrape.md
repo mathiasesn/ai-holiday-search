@@ -1,7 +1,7 @@
 ---
 description: Search flights, stays, and packages against your profile and present fit-scored matches
 argument-hint: "[optional steering, e.g. 'warm in late October, under €900/person, max 5h flight']"
-allowed-tools: Read, Write, Bash, Glob
+allowed-tools: Read, Write, Bash, Glob, WebSearch, WebFetch
 ---
 
 # /scrape — Search orchestration
@@ -37,7 +37,10 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
    - If the CLI exits non-zero reporting missing credentials (e.g. no `AMADEUS_API_KEY`), fall back to Claude's own web search for that source instead of failing the whole run — note in the final output which sources used the API vs. web-search fallback.
    - Collect all raw candidates from all three sources.
 
-5. **Deduplicate.** Read `trip_scraper/seen.json` (if absent, treat it as `{"schema_version": 1, "entries": {}}`). Derive each candidate's dedupe key exactly as specified in `.claude/skills/trip-scraper/SKILL.md` — that file is the authority on the key derivation and the file format; do not invent an ad hoc match. Drop candidates whose key is already present, and keep only genuinely new ones for scoring and presentation.
+5. **Deduplicate.** Read `trip_scraper/seen.json` (if absent, treat it as `{"schema_version": 1, "entries": {}}` — when writing it for the first time, include `schema_version`). Derive each candidate's dedupe key exactly as specified in `.claude/skills/trip-scraper/SKILL.md` — that file is the authority on the key derivation and the file format; do not invent an ad hoc match. For each candidate:
+   - If its key is **not** present in `entries`, it's genuinely new — keep it for scoring and presentation.
+   - If its key **is** present but the price has moved into a new price bucket, it's a legitimate price-change re-surface — keep it for scoring and presentation too (do not silently drop it).
+   - If its key is present and the price bucket hasn't changed, it's a true repeat — drop it from this run's presented results, but still update its `last_seen` timestamp in `seen.json` (preserving the existing `first_seen`).
 
 6. **Score each candidate.** Apply the scoring framework in `.claude/skills/holiday-planner/03-trip-evaluation.md` against the (merged) profile for every new candidate. Produce a fit score and the concrete reasoning behind it (which criteria it satisfies, which it violates, e.g. "fits budget and pace but exceeds max travel time by 40 minutes").
 
@@ -47,7 +50,7 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
    - Run `/plan <pick>` on one of the results, or
    - `/watch add <pick>` to save it to the price-tracking watchlist.
 
-9. **Persist state.** Write the full set of new candidates (scored) to a `trip_scraper/` results snapshot, and append their dedup keys to `trip_scraper/seen.json` so future `/scrape` runs don't re-present them as new.
+9. **Persist state.** Write the full set of new candidates (scored) to a `trip_scraper/` results snapshot. Update `trip_scraper/seen.json` per `.claude/skills/trip-scraper/SKILL.md`'s format: for each candidate seen this run (new, price-changed, or repeat), set/update its `last_seen` to this run's timestamp — set `first_seen` only when the entry didn't exist before, and never overwrite an existing `first_seen`. Add new entries and update existing ones; keep `schema_version` set.
 
 ## Output
 A fit-sorted list of new trip candidates with price/person and scoring reasoning, plus updated `trip_scraper/` state.

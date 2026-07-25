@@ -25,11 +25,34 @@ import argparse
 import json
 import sys
 
-AMADEUS_TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
-AMADEUS_OFFERS_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
-
 NO_CREDENTIALS_EXIT = 2
 FAILURE_EXIT = 1
+
+
+def get_amadeus_hostname():
+    """Resolve the Amadeus API hostname from AMADEUS_HOSTNAME.
+
+    Accepts the shorthand values `test` (default) or `production`, or a full
+    hostname (e.g. a self-hosted proxy). Defaults to the test/sandbox host so
+    behavior is unchanged when the env var is unset.
+    """
+    import os
+
+    raw = (os.environ.get("AMADEUS_HOSTNAME") or "test").strip()
+    lowered = raw.lower()
+    if lowered in ("", "test"):
+        return "test.api.amadeus.com"
+    if lowered == "production":
+        return "api.amadeus.com"
+    return raw
+
+
+def amadeus_token_url():
+    return f"https://{get_amadeus_hostname()}/v1/security/oauth2/token"
+
+
+def amadeus_offers_url():
+    return f"https://{get_amadeus_hostname()}/v2/shopping/flight-offers"
 
 
 def build_arg_parser():
@@ -76,7 +99,7 @@ def no_credentials_response():
 
 def get_access_token(key, secret, requests_mod):
     resp = requests_mod.post(
-        AMADEUS_TOKEN_URL,
+        amadeus_token_url(),
         data={"grant_type": "client_credentials", "client_id": key, "client_secret": secret},
         timeout=20,
     )
@@ -100,7 +123,7 @@ def search_flight_offers(token, args, requests_mod):
     if args.return_date:
         params["returnDate"] = args.return_date
     resp = requests_mod.get(
-        AMADEUS_OFFERS_URL,
+        amadeus_offers_url(),
         headers={"Authorization": f"Bearer {token}"},
         params=params,
         timeout=30,
@@ -109,18 +132,20 @@ def search_flight_offers(token, args, requests_mod):
     return resp.json()
 
 
-def normalize_offer(offer, currency):
+def normalize_offer(offer, currency, adults_arg=1):
     itineraries = offer.get("itineraries", [])
     depart_date = None
     return_date = None
     if itineraries:
         segments = itineraries[0].get("segments", [])
         if segments:
-            depart_date = segments[0].get("departure", {}).get("at", "")[:10]
+            departure_at = segments[0].get("departure", {}).get("at")
+            depart_date = departure_at[:10] if departure_at else None
     if len(itineraries) > 1:
         segments = itineraries[1].get("segments", [])
         if segments:
-            return_date = segments[0].get("departure", {}).get("at", "")[:10]
+            departure_at = segments[0].get("departure", {}).get("at")
+            return_date = departure_at[:10] if departure_at else None
 
     price_info = offer.get("price", {})
     total = price_info.get("grandTotal") or price_info.get("total")
@@ -129,11 +154,17 @@ def normalize_offer(offer, currency):
     except (TypeError, ValueError):
         price = 0.0
 
-    adults = 1
+    # `--adults` is the authoritative divisor for price-per-person: it's what
+    # the caller actually asked for. Only prefer travelerPricings' length if
+    # it's present and larger (e.g. infants/extra travelers Amadeus counted).
     try:
-        adults = max(1, int(offer.get("travelerPricings", [{}]).__len__() or 1))
-    except Exception:
-        adults = 1
+        adults_arg = int(adults_arg)
+    except (TypeError, ValueError):
+        adults_arg = 1
+    divisor = adults_arg if adults_arg > 0 else 1
+    traveler_pricings = offer.get("travelerPricings")
+    if isinstance(traveler_pricings, list) and len(traveler_pricings) > divisor:
+        divisor = len(traveler_pricings)
 
     return {
         "source": "flights-search",
@@ -141,7 +172,7 @@ def normalize_offer(offer, currency):
         "url": None,
         "price": price,
         "currency": price_info.get("currency", currency),
-        "price_per_person": round(price / adults, 2) if adults else price,
+        "price_per_person": round(price / divisor, 2),
         "dates": {"depart": depart_date, "return": return_date},
         "details": {
             "id": offer.get("id"),
@@ -190,7 +221,7 @@ def main(argv=None):
         return FAILURE_EXIT
 
     offers = raw.get("data", []) if isinstance(raw, dict) else []
-    results = [normalize_offer(o, args.currency) for o in offers[: args.max_results]]
+    results = [normalize_offer(o, args.currency, args.adults) for o in offers[: args.max_results]]
 
     if args.json:
         print(json.dumps(results))

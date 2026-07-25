@@ -35,7 +35,8 @@ ALLOWED_ENV_VAR_NAMES = {
 # Secret-shaped patterns: NAME=value or NAME: value where NAME looks like a
 # credential and value is a non-empty, non-placeholder token.
 SECRET_ASSIGNMENT_RE = re.compile(
-    r"\b([A-Z][A-Z0-9_]*(?:API_KEY|API_SECRET|SECRET|TOKEN|PASSWORD|ACCESS_KEY))\s*[:=]\s*([^\s\"'`]+)"
+    r"\b([A-Z][A-Z0-9_]*(?:API_KEY|API_SECRET|SECRET|TOKEN|PASSWORD|ACCESS_KEY))\s*[:=]\s*"
+    r"(?:\"([^\"]*)\"|'([^']*)'|`([^`]*)`|([^\s\"'`]+))"
 )
 
 PRIVATE_KEY_RE = re.compile(r"-----BEGIN (RSA |EC |OPENSSH |DSA |)PRIVATE KEY-----")
@@ -97,7 +98,8 @@ def check_secret_patterns(tracked_files, errors):
             continue
 
         for match in SECRET_ASSIGNMENT_RE.finditer(text):
-            var_name, value = match.group(1), match.group(2)
+            var_name = match.group(1)
+            value = next(g for g in match.groups()[1:] if g is not None)
             if var_name in ALLOWED_ENV_VAR_NAMES and looks_like_placeholder(value):
                 continue
             if var_name in ALLOWED_ENV_VAR_NAMES:

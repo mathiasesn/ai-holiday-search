@@ -21,6 +21,12 @@ import sys
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+BACKTICK_PATH_RE = re.compile(r"`([^`\s]+\.(?:md|py))`")
+
+# Runtime paths under these prefixes are gitignored personal data written by
+# /setup, /scrape, /watch, /plan — they're expected to be absent from a clean
+# tracked tree, so backticked references to them aren't broken links.
+PERSONAL_PATH_PREFIXES = ("profile/", "itineraries/", "watchlist/", "trip_scraper/", "documents/")
 
 
 def find_files(patterns_root, filename):
@@ -34,7 +40,7 @@ def find_files(patterns_root, filename):
     return results
 
 
-def parse_frontmatter(path):
+def parse_frontmatter(path, errors=None):
     """Hand-rolled minimal YAML frontmatter parser: returns dict of top-level
     scalar string keys, or None if no frontmatter block is present.
 
@@ -60,24 +66,36 @@ def parse_frontmatter(path):
         return None, text
 
     fm = {}
-    for line in lines[1:end_idx]:
-        if not line.strip() or line.strip().startswith("#"):
+    rel = os.path.relpath(path, REPO_ROOT)
+    last_key = None
+    for offset, line in enumerate(lines[1:end_idx]):
+        line_no = offset + 2  # 1-indexed, line 1 is the opening '---'
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
             continue
-        if ":" not in line:
+        if ":" in line and not line[:1].isspace():
+            key, _, value = line.partition(":")
+            key = key.strip()
+            value = value.strip()
+            if value.startswith(("'", '"')) and value.endswith(("'", '"')) and len(value) >= 2:
+                value = value[1:-1]
+            fm[key] = value
+            last_key = key
             continue
-        key, _, value = line.partition(":")
-        key = key.strip()
-        value = value.strip()
-        if value.startswith(("'", '"')) and value.endswith(("'", '"')) and len(value) >= 2:
-            value = value[1:-1]
-        fm[key] = value
+        if line[:1].isspace() and last_key is not None:
+            # Continuation of the previous value (e.g. wrapped multi-line text).
+            continue
+        if errors is not None:
+            errors.append(f"{rel}:{line_no}: malformed frontmatter line (not 'key: value', a comment, blank, or a continuation): {stripped!r}")
+        else:
+            continue
 
     body = "\n".join(lines[end_idx + 1 :])
     return fm, body
 
 
 def check_skill_file(path, errors):
-    fm, body = parse_frontmatter(path)
+    fm, body = parse_frontmatter(path, errors)
     dir_name = os.path.basename(os.path.dirname(path))
     rel = os.path.relpath(path, REPO_ROOT)
 
@@ -100,7 +118,7 @@ def check_skill_file(path, errors):
 
 
 def check_command_file(path, errors):
-    fm, body = parse_frontmatter(path)
+    fm, body = parse_frontmatter(path, errors)
     rel = os.path.relpath(path, REPO_ROOT)
 
     if fm is None:
@@ -133,6 +151,22 @@ def check_links(path, body, errors):
         resolved = os.path.normpath(os.path.join(base_dir, target_path))
         if not os.path.exists(resolved):
             errors.append(f"{rel}: relative link target does not exist: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
+
+    for match in BACKTICK_PATH_RE.finditer(body):
+        target = match.group(1)
+        if "/" not in target:
+            continue
+        # Skip obviously illustrative/placeholder paths (angle brackets, globs,
+        # brace-expansion lists, ellipsis).
+        if any(ch in target for ch in ("<", ">", "*", "{", "}")) or "..." in target:
+            continue
+        # Skip paths under gitignored personal-data dirs — these are runtime
+        # paths written by /setup, /scrape, /watch, /plan, never tracked in git.
+        if target.startswith(PERSONAL_PATH_PREFIXES):
+            continue
+        resolved = os.path.normpath(os.path.join(REPO_ROOT, target))
+        if not os.path.exists(resolved):
+            errors.append(f"{rel}: backticked repo-relative path does not exist: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
 
 
 def check_agents_skills_structure(errors):

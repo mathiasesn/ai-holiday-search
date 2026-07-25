@@ -101,7 +101,7 @@ This runs the full workflow: evaluate fit, draft a day-by-day itinerary with bud
 
 ```
 ai-holiday-search/
-├── CLAUDE.md                            # Main traveler profile + workflow rules
+├── CLAUDE.md                            # Framework/workflow rules only (no personal data)
 ├── .claude/
 │   ├── commands/
 │   │   ├── setup.md                     # /setup onboarding (documents, paste, or interview)
@@ -132,7 +132,12 @@ ai-holiday-search/
 ├── itineraries/                         # /plan output (one folder per trip)
 ├── watchlist/                           # /watch state (trip snapshots, price history)
 ├── trip_scraper/                        # Scraper state (seen trips, results)
-├── trip_tracker.csv                     # Shortlist tracking spreadsheet
+├── trip_tracker.csv.example             # Shortlist tracking spreadsheet template (copy to trip_tracker.csv, gitignored)
+├── tools/
+│   ├── lint_skills.py                   # Validates SKILL.md/command frontmatter and cross-links
+│   └── security_guards.py               # Guards against committed secrets and personal-data leaks
+├── .github/workflows/ci.yml             # CI: runs the lint and security guards on every push
+├── requirements.txt                     # Python dependencies (requests)
 └── SETUP.md                             # Detailed setup guide
 ```
 
@@ -173,7 +178,7 @@ Adding a source = copying a skill folder, pointing it at a site or API, and desc
 
 | File                        | What to change                                              |
 | --------------------------- | ----------------------------------------------------------- |
-| `CLAUDE.md`                 | Your full travel profile and workflow rules                 |
+| `profile/` (gitignored, written by `/setup`) | Your full travel profile — group composition, budget, home airports, constraints, style, history |
 | `01-traveler-profile.md`    | Group composition, budget, home airports, constraints       |
 | `02-travel-style.md`        | Pace, taste, standards, dealbreakers                        |
 | `03-trip-evaluation.md`     | Fit-scoring weights (e.g., budget vs. flight time)          |
