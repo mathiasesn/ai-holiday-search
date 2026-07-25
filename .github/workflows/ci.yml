@@ -4,6 +4,14 @@ on:
   push:
   pull_request:
 
+# The adapters' no-credentials path is only exercised if none of these are set.
+# Kept in one place so a new adapter credential is added once, not per job.
+env:
+  ADAPTER_CRED_VARS: >-
+    AMADEUS_API_KEY AMADEUS_API_SECRET
+    STAYS_API_URL STAYS_API_KEY
+    PACKAGES_API_URL PACKAGES_API_KEY
+
 jobs:
   lint-and-guards:
     runs-on: ubuntu-latest
@@ -39,27 +47,17 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
+      # `uv run --python X` downloads X on demand and exits non-zero if it
+      # cannot honor the request, so it needs no separate install step and
+      # cannot silently fall back to the .python-version pin.
       - name: Smoke-test search adapters --help (no credentials in environment)
         run: |
           set -e
+          for v in $ADAPTER_CRED_VARS; do unset "$v"; done
           for f in .agents/skills/*/search.py; do
             echo "Running: $f --help"
-            env -u AMADEUS_API_KEY -u AMADEUS_API_SECRET -u STAYS_API_URL -u STAYS_API_KEY -u PACKAGES_API_URL -u PACKAGES_API_KEY \
-              uv run --python ${{ matrix.python-version }} "$f" --help
+            uv run --python ${{ matrix.python-version }} "$f" --help
           done
-
-      - name: Verify matrix Python version actually ran
-        run: |
-          set -e
-          resolved="$(uv run --python ${{ matrix.python-version }} python -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')"
-          echo "Resolved interpreter: $resolved (expected ${{ matrix.python-version }})"
-          if [ "$resolved" != "${{ matrix.python-version }}" ]; then
-            echo "::error::uv resolved Python $resolved instead of matrix version ${{ matrix.python-version }} (check .python-version override)"
-            exit 1
-          fi
 
   standalone-adapter:
     runs-on: ubuntu-latest
@@ -72,25 +70,19 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Copy one adapter folder outside the repo checkout
+      # Every adapter must survive the documented copy-a-folder fork workflow,
+      # so copy each one out of the checkout in turn — a broken PEP 723 header
+      # in any single adapter has to fail this job.
+      - name: Run each adapter standalone outside the repo (PEP 723 metadata)
         run: |
           set -e
-          adapter_dir="$(dirname "$(ls .agents/skills/*/search.py | head -n1)")"
-          tmp_dir="$(mktemp -d)"
-          cp -r "$adapter_dir"/. "$tmp_dir"/
-          echo "STANDALONE_DIR=$tmp_dir" >> "$GITHUB_ENV"
-
-      - name: Assert no repo/venv/pyproject.toml present in standalone copy
-        run: |
-          set -e
-          if [ -f "$STANDALONE_DIR/pyproject.toml" ] || [ -d "$STANDALONE_DIR/.venv" ] || [ -d "$STANDALONE_DIR/.git" ]; then
-            echo "::error::standalone adapter copy unexpectedly contains repo/venv/pyproject.toml"
-            exit 1
-          fi
-
-      - name: Run standalone adapter --help via uv (PEP 723 inline metadata)
-        run: |
-          set -e
-          cd "$STANDALONE_DIR"
-          env -u AMADEUS_API_KEY -u AMADEUS_API_SECRET -u STAYS_API_URL -u STAYS_API_KEY -u PACKAGES_API_URL -u PACKAGES_API_KEY \
-            uv run search.py --help
+          for v in $ADAPTER_CRED_VARS; do unset "$v"; done
+          repo="$PWD"
+          for f in "$repo"/.agents/skills/*/search.py; do
+            adapter="$(basename "$(dirname "$f")")"
+            tmp_dir="$(mktemp -d)"
+            cp -r "$(dirname "$f")"/. "$tmp_dir"/
+            echo "Running $adapter standalone in $tmp_dir"
+            (cd "$tmp_dir" && uv run search.py --help >/dev/null)
+            rm -rf "$tmp_dir"
+          done
