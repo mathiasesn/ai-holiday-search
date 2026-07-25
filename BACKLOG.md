@@ -130,6 +130,55 @@ theoretical.
 Fix: matrix the `lint-and-guards` job too, or drop the floor to what is actually
 tested. Cheap either way; worth doing alongside item 1's fixture tests.
 
+### 10. `/watch` has no path for browser-driven sources
+
+`trivago-search` produces candidates with `source: "trivago-search"`, but
+`/watch` and `.claude/skills/price-watch/SKILL.md` know only two kinds of trip:
+one re-searchable through a `.agents/skills/*` adapter, and one that was pasted.
+A trivago candidate matches neither, so `/watch add` on a `/scrape` result can
+save a trip that no re-check branch knows how to price again.
+
+There is a second, harder half. `price-watch` is built for unattended re-checks
+and the README says `/watch` can be scheduled via cron or CI — but the
+`claude-in-chrome` driver needs an attended session with site permission, so it
+cannot run on a schedule at all. The two statements currently contradict each
+other.
+
+Needs a decision, not just an edit. Options:
+
+- Re-check trivago trips with a driver that can run unattended (the
+  substitutable-driver contract in `.claude/skills/trivago-search/SKILL.md`
+  exists for exactly this; Playwright MCP is the obvious candidate). Costs a new
+  dependency in a repo that currently has one.
+- Degrade browser-driven trips to Claude web search on re-check, and say plainly
+  in the report that the price came from a weaker source than the original
+  snapshot.
+- Refuse `/watch add` for browser-driven candidates and say why.
+
+Whichever is chosen, `price-watch/SKILL.md`, `.claude/commands/watch.md`, and the
+README's "schedule it" claim must end up agreeing.
+
+### 11. Nothing verifies a browser-driven source
+
+CI cannot exercise `trivago-search`: there is no browser in the runner, and the
+procedure depends on a live third-party site. `tools/lint_skills.py` checks its
+frontmatter and links, which proves the file is well-formed and proves nothing
+about whether the procedure still works.
+
+The specific decay risks, all recorded in the skill itself:
+
+- The `search=` URL grammar was captured from one live session. `drs-40` has an
+  unknown meaning and the Danish locale segment was never confirmed.
+- The `locationId` values are opaque and site-assigned; a stale one silently
+  returns the wrong city rather than failing.
+- Card layout drives the per-night-vs-total price distinction, which is the one
+  place a silent DOM change produces wrong numbers instead of no numbers.
+
+This is not fixable by a normal test, and mocking the site would only assert
+that the mock matches the doc. The realistic options are a manual re-verification
+checklist run when trivago results look wrong, or an opt-in live smoke check that
+is never part of required CI. Related to item 1: exit 0 is not evidence.
+
 ## Features
 
 Consolidated here from the README Roadmap; this file is the single list.

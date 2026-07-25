@@ -1,6 +1,7 @@
 # AI Holiday Search — Architecture Documentation
 
 > Generated: 2026-07-25 · Commit: 30f2b77 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
+> Last architecture change: `d9c1895` — browser-driven sources (§8 carve-out, §10, §11)
 > Re-read this file at the start of any session touching this codebase. Update it when the architecture changes (new major dependency, restructured layer, changed convention).
 
 ---
@@ -45,6 +46,7 @@ A defining constraint: **every external-data path degrades gracefully.** No adap
 | CI | GitHub Actions (`.github/workflows/ci.yml`) | 3 jobs; `astral-sh/setup-uv@v5` |
 | Host agent | Claude Code | Commands, skills, and subagent (`Task`/`Agent`) spawning |
 | Optional external API | Amadeus Self-Service (flights) | Free tier; stays/packages ship without a bundled API |
+| Optional browser driver | `claude-in-chrome` MCP tools | Only for browser-driven sources (§8). Not a package dependency — an attended Chrome session with per-site permission. Absent ⇒ web-search fallback |
 
 There is no test framework, no linter config, and no formatter config in this repo. `tools/lint_skills.py` is a bespoke structural linter, not a Python style linter. Adding real tests is `BACKLOG.md` item 1.
 
@@ -104,7 +106,7 @@ ai-holiday-search/
 These are the principles actually governing this codebase, inferred from the code and confirmed by its comments and `BACKLOG.md`:
 
 1. **Logic lives in Markdown; Python is I/O only.** Scoring, pacing, budgeting, and pipeline sequencing are specified in `.claude/skills/**`. Do not port that logic into Python — the agent is the interpreter. Python exists only where a deterministic external call or a hygiene check is needed.
-2. **Graceful degradation is mandatory, never optional.** Every source has a fallback chain: adapter → Claude web search → user pastes text. The paste path is a first-class input that enters the same evaluate → draft → review → verify pipeline, per `CLAUDE.md`.
+2. **Graceful degradation is mandatory, never optional.** Every source has a fallback chain, whatever its kind: adapter (exit 2) or browser read (unreachable, permission denied, bot challenge) → Claude web search → user pastes text. The paste path is a first-class input that enters the same evaluate → draft → review → verify pipeline, per `CLAUDE.md`. No source may fail a `/scrape` run.
 3. **Adapters are self-contained, and duplication is the accepted price.** The copy-a-folder fork workflow means `.agents/skills/*/search.py` cannot import a shared module. ~330 near-identical lines across the three adapters is a **deliberate, rejected-refactor** decision (`BACKLOG.md` item 7), guarded by a CI drift check instead of deduplicated.
 4. **Personal data never enters git.** Enforced structurally by `.gitignore` and mechanically by `tools/security_guards.py`, not by convention alone. See §9.
 5. **Tracked templates are the *shape*, never the data.** `.claude/skills/holiday-planner/0X-*.md` carry `<!-- FILL IN -->` markers and generic defaults. A filled `profile/0X-*.md` copy always wins when present; if `profile/` is absent, commands must stop and say "run `/setup`" rather than plan against placeholder examples.
@@ -253,7 +255,8 @@ Per `CLAUDE.md`: **never `git add -A` in this repo.** Check `git status` first a
 User types /scrape
    → .claude/commands/scrape.md          (the procedure: inputs, steps, outputs, state touched)
        → .claude/skills/trip-scraper/    (fan-out rules, adapter protocol, dedupe, schemas)
-           → .agents/skills/*/search.py  (the actual network call, or exit 2 → web-search fallback)
+           → .agents/skills/*/search.py       (the network call, or exit 2 → web-search fallback)
+           → .claude/skills/trivago-search/   (browser read, or own fallback chain → web search)
        → .claude/skills/holiday-planner/03-trip-evaluation.md  (scoring + ranking)
        → profile/*.md                     (the traveler's real data; must exist)
 ```
@@ -327,7 +330,7 @@ Non-negotiables — an agent working in this repo must not violate these:
 
 - **Never commit personal data.** `profile/`, `itineraries/`, `watchlist/`, `trip_scraper/`, `trip_tracker.csv`, `documents/` contents, `.env`. Check `git status` before staging; never `git add -A`.
 - **Never plan against the tracked templates.** If `profile/` is missing or still has `<!-- FILL IN -->` markers, stop and tell the user to run `/setup`.
-- **The adapter exit-code protocol is load-bearing.** Exit 2 means "no credentials, fall back to web search," not failure. The exact no-credentials JSON shape is identical across all adapters and is CI-enforced.
+- **The adapter exit-code protocol is load-bearing.** Exit 2 means "no credentials, fall back to web search," not failure. The exact no-credentials JSON shape is identical across all adapters and is CI-enforced. It binds every `.agents/skills/*` CLI adapter; browser-driven sources are exempt and carry their own fallback chain instead (§8 carve-out) — that exemption is not a licence to weaken it for adapters.
 - **Adapter duplication is deliberate.** Do not extract `.agents/skills/_common.py` — it breaks the copy-a-folder fork workflow. See `BACKLOG.md` item 7 before touching this.
 - **Adapters must stay standalone.** Keep the PEP 723 header accurate and never import from `tools/` or across skill folders.
 - **Never leak credentials into output.** Errors report exception class names, not messages containing request details.

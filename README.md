@@ -33,6 +33,7 @@ The framework encodes trip-planning best practices: structured fit criteria, rea
   provisions its own Python (3.10+), so no system Python is needed. See
   [SETUP.md](SETUP.md#prerequisites) for alternatives.
 - (Optional) API keys for flight/accommodation search — see [Search sources](#search-sources). Everything degrades gracefully to Claude's web search + paste-a-listing mode.
+- (Optional) The [Claude Chrome extension](https://claude.ai/chrome), for the trivago.dk stays source. Without it, `/scrape` falls back to web search — nothing breaks.
 
 ## Quick start
 
@@ -99,6 +100,8 @@ This runs the full workflow: evaluate fit, draft a day-by-day itinerary with bud
 
 `/watch` stores a snapshot of each saved trip in `watchlist/` and, on each run, re-searches the same route/dates and reports drops, rises, and sold-out warnings. Run it manually or schedule it (cron, CI, or Claude Code on a recurring task).
 
+Scheduling works for trips found through the API adapters. Trips that came from the browser-driven trivago source are not yet re-checkable unattended, because that source needs an attended browser session — see [BACKLOG.md](BACKLOG.md) item 10.
+
 ## File structure
 
 ```
@@ -121,7 +124,8 @@ ai-holiday-search/
 │   │   │   ├── 05-budget-rules.md       # Cost categories, verification, buffers
 │   │   │   └── 06-packing-and-prep.md   # Packing lists, docs, insurance checklist
 │   │   ├── trip-scraper/                # Search orchestration across sources
-│   │   └── price-watch/                 # Snapshot + re-check logic
+│   │   ├── price-watch/                 # Snapshot + re-check logic
+│   │   └── trivago-search/              # trivago.dk stays source, driven in a real browser
 │   └── settings.local.json              # Claude Code permissions
 ├── .agents/skills/                      # Search source skills (add your own)
 │   ├── flights-search/                  # Flight search (API or web-search based)
@@ -168,15 +172,20 @@ All recommendations are grounded in your actual profile. The system flags uncert
 
 ## Search sources
 
-The skills in `.agents/skills/` are intentionally thin adapters. Out of the box:
+Sources come in two kinds. Most are thin CLI adapters in `.agents/skills/`; one reads a site in a real browser because it has no usable API. Out of the box:
 
 | Source          | Method                                  | Setup                    |
 | --------------- | --------------------------------------- | ------------------------ |
 | Flights         | Amadeus Self-Service API (free tier) or web search | `AMADEUS_API_KEY` (optional) |
-| Stays           | Web search + paste-a-listing            | none                     |
+| Stays           | Configurable JSON feed, or web search + paste-a-listing | `STAYS_API_URL` (optional) |
+| Stays (trivago) | trivago.dk read in your own browser     | Chrome extension (optional) |
 | Packages        | Template skill — add your local operators | fork and edit          |
 
-Adding a source = copying a skill folder, pointing it at a site or API, and describing the result format in its SKILL.md. PRs adding country-specific package/charter skills are welcome — that's the intended way this grows.
+**Why trivago is different.** trivago has no public search API and refuses non-browser clients outright, so that skill drives your actual Chrome session instead of making HTTP calls. It runs alongside the regular stays adapter, not instead of it, and only when the search actually involves a stay. If the extension isn't installed, permission isn't granted, or the site throws a bot challenge, `/scrape` degrades to web search and then to asking you to paste a listing — the run always completes.
+
+Two things worth knowing before relying on it: metasearch prices exclude taxes and fees more often than not, so every figure it reports is labeled an estimate; and because it reads a live site rather than a stable API, it will need occasional re-verification when the page changes ([BACKLOG.md](BACKLOG.md) item 11).
+
+Adding a CLI adapter = copying a skill folder in `.agents/skills/`, pointing it at a site or API, and describing the result format in its SKILL.md. Adding a browser-driven source = a Markdown-only skill under `.claude/skills/`, with its own fallback chain and no `search.py`. `ARCHI.md` §8 documents both paths. PRs adding country-specific package/charter skills are welcome — that's the intended way this grows.
 
 ## Customization
 
