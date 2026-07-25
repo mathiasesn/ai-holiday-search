@@ -1,6 +1,6 @@
 # AI Holiday Search — Architecture Documentation
 
-> Generated: 2026-07-25 · Commit: a126743 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
+> Generated: 2026-07-25 · Commit: eb09951 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
 > Last architecture change: `a126743` — `booking-search` added as a third browser-driven source (stays + flights; no packages vertical)
 > Re-read this file at the start of any session touching this codebase. Update it when the architecture changes (new major dependency, restructured layer, changed convention).
 

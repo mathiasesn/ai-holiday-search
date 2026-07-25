@@ -132,18 +132,19 @@ tested. Cheap either way; worth doing alongside item 1's fixture tests.
 
 ### 10. `/watch` has no path for browser-driven sources
 
-`trivago-search` and `momondo-search` produce candidates with their own `source`
-values, but `/watch` and `.claude/skills/price-watch/SKILL.md` know only two
-kinds of trip: one re-searchable through a `.agents/skills/*` adapter, and one
-that was pasted. A browser-driven candidate matches neither, so `/watch add` on
-a `/scrape` result can save a trip that no re-check branch knows how to price
+The browser-driven sources produce candidates with their own `source` values,
+but `/watch` and `.claude/skills/price-watch/SKILL.md` know only two kinds of
+trip: one re-searchable through a `.agents/skills/*` adapter, and one that was
+pasted. A browser-driven candidate matches neither, so `/watch add` on a
+`/scrape` result can save a trip that no re-check branch knows how to price
 again.
 
-`momondo-search` widened this gap. It was a stays-only problem while
+Each source added since has widened this gap. It was a stays-only problem while
 `trivago-search` was the sole browser-driven source — a user could at least
-re-check flights and packages through the adapters. momondo covers all three
-verticals, so the untrackable set now includes flight and package candidates
-too, which are exactly the ones whose prices move most.
+re-check flights and packages through the adapters. `momondo-search` covers all
+three verticals and `booking-search` covers stays and flights, so the
+untrackable set now includes flight and package candidates too, which are
+exactly the ones whose prices move most.
 
 There is a second, harder half. `price-watch` is built for unattended re-checks
 and the README says `/watch` can be scheduled via cron or CI — but the
@@ -164,13 +165,13 @@ Needs a decision, not just an edit. Options:
 
 Whichever is chosen, `price-watch/SKILL.md`, `.claude/commands/watch.md`, and the
 README's "schedule it" claim must end up agreeing. The substitutable-driver note
-now lives in `.claude/skills/trivago-search/SKILL.md` and is referenced by
-`momondo-search` — one driver decision would cover both sources.
+lives once in `.claude/skills/trivago-search/SKILL.md` and is referenced by the
+other browser-driven skills — one driver decision covers all of them.
 
 ### 11. Nothing verifies a browser-driven source
 
-CI cannot exercise `trivago-search` or `momondo-search`: there is no browser in
-the runner, and both procedures depend on live third-party sites.
+CI cannot exercise any browser-driven source: there is no browser in the runner,
+and every one of these procedures depends on a live third-party site.
 `tools/lint_skills.py` checks frontmatter and links, which proves the files are
 well-formed and proves nothing about whether the procedures still work.
 
@@ -189,6 +190,15 @@ The specific decay risks, all recorded in the skills themselves:
   the total on the other, so a DOM change that swaps them produces plausible
   wrong numbers. The stays price basis depends on a `Pris:` dropdown that
   defaults to per-night.
+- **booking:** the same per-person-vs-total inversion across its two verticals —
+  the stays headline is the stay total including taxes, the flights headline is
+  per person with the party total on a smaller line beneath. The flights read
+  spans a second domain (`flights.booking.com`, operated by a third party), so
+  it can rot independently of the stays flow. Eight tokens and behaviors are
+  marked UNVERIFIED in the skill and must not be silently promoted to fact on a
+  later pass. The absence of a packages vertical is a **negative** finding
+  verified on one date — if booking.com ever ships a bundled product, nothing
+  will notice.
 
 Every one of these is a silent-wrong-number risk, not a crash: the failure mode
 is a shortlist that looks fine and is priced wrong.
@@ -199,8 +209,8 @@ re-verification checklist run when results look wrong, or an opt-in live smoke
 check that is never part of required CI. Related to item 1: exit 0 is not
 evidence.
 
-Both skills record the date their facts were captured (both 2026-07-25) — that
-date is the closest thing to a freshness signal this repo has, and a
+Each skill records the date its facts were captured (all three 2026-07-25) —
+that date is the closest thing to a freshness signal this repo has, and a
 re-verification pass should update it.
 
 ## Features
