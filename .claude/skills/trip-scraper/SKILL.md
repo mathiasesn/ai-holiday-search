@@ -16,9 +16,13 @@ Destinations, date windows, price ceiling, and sources queried by default live i
 [search-queries.md](search-queries.md) — a tracked generic template, filled in per-traveler by
 `/setup` at `profile/search-queries.md` (which wins if present).
 
-## Fan-out to source adapters
+## Fan-out to sources
 
-For each configured source, run the adapter's CLI:
+Stays are queried through two sources, not one: the `stays-search` CLI adapter below, and
+`trivago-search`, a browser-driven skill (not a CLI adapter — see next section). Flights and
+packages only have the CLI adapters.
+
+For each configured CLI-adapter source, run the adapter's CLI:
 
 ```
 uv run .agents/skills/flights-search/search.py --json <args>
@@ -50,6 +54,17 @@ uv run .agents/skills/packages-search/search.py --json <args>
 - Any other non-zero exit is a real failure: report it, skip that source for this run, continue
   with the others.
 
+### trivago-search: browser-driven, not an exit-code adapter
+
+`trivago-search` is a first-class stays source that runs on every `/scrape`, alongside (not
+instead of) `stays-search`. It has no `search.py`, no CLI invocation, and no exit code — it drives
+a real browser session per `.claude/skills/trivago-search/SKILL.md`, whose default driver is the
+`claude-in-chrome` MCP tools. It is therefore exempt from the exit-2 no-credentials
+protocol above; instead it has its own fallback chain (browser unreachable / extension not
+connected / site permission denied / page unreadable / bot challenge shown → Claude web search
+with the same params → ask the user to paste listing text). See that skill's `SKILL.md` for the
+full procedure. Every price it produces is a web-read estimate and must be labeled as such.
+
 ## Adapter result record (authoritative)
 
 Each `.agents/skills/*/search.py` adapter's `--json` output is a JSON array of records in this
@@ -70,6 +85,9 @@ docstrings only summarize it and point back here):
 `--json` with no matches prints `[]`. This record is distinct from the post-fan-out "Normalized
 candidate record" below, which `trip-scraper` produces by merging one or more of these adapter
 records with destination/trip context for scoring.
+
+`trivago-search` results normalize into this same record shape, with `source: "trivago-search"`,
+even though they come from a browser read rather than a `--json` CLI call.
 
 ## Paste-a-listing fallback
 
@@ -146,6 +164,15 @@ dedupe_key = sha256(f"{source}|{destination_slug}|{depart_date}|{return_date}|{p
   timestamp every time the same key is seen again. Both are ISO-8601 with timezone offset.
 - If `trip_scraper/seen.json` doesn't exist yet, create it with `schema_version: 1` and an
   empty `entries` object, then populate it.
+
+## Cross-source duplicate collapsing (presentation only)
+
+Because `trivago-search` is metasearch, it routinely surfaces the same property that
+`stays-search` also found, at a different price. This is separate from `seen.json` dedupe above
+(which is unchanged) — it happens at presentation time, after scoring: when the same property
+appears from both sources, collapse them into a single presented candidate showing the lower
+price and naming both sources (e.g. "also on stays-search at €812"). Every `trivago-search` price
+involved is a web-read estimate and must be labeled as such.
 
 ## Handing off to scoring
 
