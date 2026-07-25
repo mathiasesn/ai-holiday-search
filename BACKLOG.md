@@ -61,14 +61,20 @@ Kept here as a record because the contradiction — a gitignored directory with 
 tracked file inside it — is what `tools/security_guards.py` flagged, and is the
 kind of drift the guard exists to catch.
 
-### 6. ~~Pin dependencies~~ — resolved; enable Dependabot still open
+### 6. Pin dependencies — resolved for tooling; adapters still unpinned
 
-Resolved: the project moved from `requirements.txt` to uv, with dependencies
-declared in `pyproject.toml` and pinned via a committed `uv.lock` — a green CI
-run now proves a forker's `uv sync` resolves the same versions.
+Resolved for the project environment: `tools/` and the project itself moved
+from `requirements.txt` to uv, with dependencies declared in `pyproject.toml`
+and pinned via a committed `uv.lock` — a green CI run now proves a forker's
+`uv sync` resolves the same versions.
 
-Still open: enable Dependabot (or an equivalent) to propose upgrades against
-`uv.lock`.
+Still open: the three adapters are invoked as `uv run <path>/search.py` and
+carry PEP 723 inline metadata (`dependencies = ["requests"]`). `uv run` on a
+script resolves an isolated environment from that inline block — it does not
+consult `pyproject.toml` or `uv.lock` — so `requests` still resolves unpinned
+on each adapter run. `uv lock --script <file>` would produce a per-script
+lockfile for this but has not been adopted. Also still open: enable Dependabot
+(or an equivalent) to propose upgrades against `uv.lock`.
 
 ### 7. Shared adapter code (`.agents/skills/_common.py`)
 

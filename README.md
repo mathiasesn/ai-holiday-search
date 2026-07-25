@@ -32,7 +32,8 @@ The framework encodes trip-planning best practices: structured fit criteria, rea
 - [uv](https://docs.astral.sh/uv/) — install with `curl -LsSf https://astral.sh/uv/install.sh | sh`,
   or via Homebrew/pipx/winget (see the
   [installation guide](https://docs.astral.sh/uv/getting-started/installation/)). uv
-  provisions its own Python, so a system Python install is not required.
+  provisions its own Python, so a system Python install is not required — it will fetch
+  Python 3.10+ (the project's minimum supported version) automatically if needed.
 - (Optional) API keys for flight/accommodation search — see [Search sources](#search-sources). Everything degrades gracefully to Claude's web search + paste-a-listing mode.
 
 ## Quick start

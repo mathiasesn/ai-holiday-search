@@ -8,7 +8,8 @@ This guide covers getting a fresh fork of **ai-holiday-search** running end to e
 - [uv](https://docs.astral.sh/uv/) — install with `curl -LsSf https://astral.sh/uv/install.sh | sh`,
   or via Homebrew/pipx/winget (see the
   [installation guide](https://docs.astral.sh/uv/getting-started/installation/)). uv
-  provisions its own Python, so a system Python install is not required.
+  provisions its own Python, so a system Python install is not required — it will fetch
+  Python 3.10+ (the project's minimum supported version) automatically if needed.
 - (Optional) `AMADEUS_API_KEY` and `AMADEUS_API_SECRET` — free-tier Amadeus Self-Service
   API credentials, used by `flights-search`. Without them, flight search falls back to
   Claude's web search.
@@ -112,6 +113,9 @@ operator or booking site):
 2. Edit `SKILL.md` to describe the new source and its result format.
 3. Edit `search.py` (or your CLI's entry point) to point at the new site or API, keeping
    the same `--json` / `--help` / non-zero-exit-on-failure contract as the other adapters.
+   Keep the `# /// script ... # ///` PEP 723 header at the top of `search.py` — it's what
+   lets `uv run` execute the copied file standalone; extend its `dependencies` list if the
+   new source needs packages beyond `requests`.
 4. Reference the new source from `/scrape`'s configured sources or `search-queries.md` as
    needed.
 
