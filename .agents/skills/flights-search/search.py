@@ -9,17 +9,9 @@ Exit codes:
 
 Never prints or logs the API key/secret, including in error messages.
 
-Normalized result record shape (see SKILL.md for the authoritative doc):
-  {
-    "source": "flights-search",
-    "title": str,
-    "url": str | None,
-    "price": float,
-    "currency": str,
-    "price_per_person": float,
-    "dates": {"depart": "YYYY-MM-DD", "return": "YYYY-MM-DD" | None},
-    "details": {...free-form...}
-  }
+Result record: source, title, url, price, currency, price_per_person, dates
+(depart/return), details (free-form). Authoritative shape:
+.claude/skills/trip-scraper/SKILL.md ("Adapter result record").
 """
 import argparse
 import json
@@ -88,6 +80,7 @@ def get_credentials():
 def no_credentials_response():
     return {
         "status": "no_credentials",
+        "reason": "missing_api_credentials",
         "message": (
             "AMADEUS_API_KEY and/or AMADEUS_API_SECRET are not set. "
             "Fall back to Claude web search for flight options."
@@ -157,14 +150,7 @@ def normalize_offer(offer, currency, adults_arg=1):
     # `--adults` is the authoritative divisor for price-per-person: it's what
     # the caller actually asked for. Only prefer travelerPricings' length if
     # it's present and larger (e.g. infants/extra travelers Amadeus counted).
-    try:
-        adults_arg = int(adults_arg)
-    except (TypeError, ValueError):
-        adults_arg = 1
-    divisor = adults_arg if adults_arg > 0 else 1
-    traveler_pricings = offer.get("travelerPricings")
-    if isinstance(traveler_pricings, list) and len(traveler_pricings) > divisor:
-        divisor = len(traveler_pricings)
+    divisor = max(adults_arg, len(offer.get("travelerPricings") or []), 1)
 
     return {
         "source": "flights-search",
@@ -213,9 +199,6 @@ def main(argv=None):
     try:
         token = get_access_token(key, secret, requests)
         raw = search_flight_offers(token, args, requests)
-    except requests.exceptions.RequestException as exc:
-        sys.stderr.write(f"flights-search: network/HTTP error while contacting Amadeus: {exc.__class__.__name__}\n")
-        return FAILURE_EXIT
     except Exception as exc:  # noqa: BLE001 - report readable failure, never leak secrets
         sys.stderr.write(f"flights-search: request failed: {exc.__class__.__name__}\n")
         return FAILURE_EXIT

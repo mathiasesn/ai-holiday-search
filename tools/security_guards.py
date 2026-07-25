@@ -14,13 +14,16 @@ Checks (stdlib only):
 
 Exit 0 on success; non-zero with actionable messages on failure.
 """
+import os
 import re
 import subprocess
 import sys
 
-REPO_ROOT = subprocess.run(
-    ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True
-).stdout.strip()
+from _repo import repo_root, ignored_paths, tracked_files as _tracked_files
+
+REPO_ROOT = repo_root()
+
+MAX_SCANNED_FILE_BYTES = 1024 * 1024  # 1 MB; skip larger tracked files (e.g. binaries).
 
 # Env var NAMES that are fine to mention in docs/code as long as no value is attached.
 ALLOWED_ENV_VAR_NAMES = {
@@ -33,10 +36,11 @@ ALLOWED_ENV_VAR_NAMES = {
 }
 
 # Secret-shaped patterns: NAME=value or NAME: value where NAME looks like a
-# credential and value is a non-empty, non-placeholder token.
+# credential. The value is captured once, quotes and all; callers strip
+# surrounding quotes with `strip_quotes` before evaluating it.
 SECRET_ASSIGNMENT_RE = re.compile(
     r"\b([A-Z][A-Z0-9_]*(?:API_KEY|API_SECRET|SECRET|TOKEN|PASSWORD|ACCESS_KEY))\s*[:=]\s*"
-    r"(?:\"([^\"]*)\"|'([^']*)'|`([^`]*)`|([^\s\"'`]+))"
+    r"(\"[^\"]*\"|'[^']*'|`[^`]*`|[^\s\"'`]+)"
 )
 
 PRIVATE_KEY_RE = re.compile(r"-----BEGIN (RSA |EC |OPENSSH |DSA |)PRIVATE KEY-----")
@@ -60,8 +64,15 @@ PLACEHOLDER_PATTERN_RE = re.compile(
 )
 
 
+def strip_quotes(value):
+    """Strip one layer of matching surrounding quote characters, if present."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'`":
+        return value[1:-1]
+    return value
+
+
 def looks_like_placeholder(value):
-    stripped = value.strip("\"'.,")
+    stripped = value.strip(".,")
     if stripped.lower() in PLACEHOLDER_VALUES:
         return True
     return bool(PLACEHOLDER_PATTERN_RE.match(stripped))
@@ -77,31 +88,32 @@ PERSONAL_PATHS = [
 ]
 
 
-def run(cmd):
-    return subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True)
-
-
 def git_ls_files():
-    result = run(["git", "ls-files"])
-    if result.returncode != 0:
-        sys.stderr.write(f"security_guards.py: git ls-files failed: {result.stderr}\n")
+    try:
+        return _tracked_files(root=REPO_ROOT)
+    except RuntimeError as e:
+        sys.stderr.write(f"security_guards.py: {e}\n")
         sys.exit(1)
-    return [line for line in result.stdout.splitlines() if line]
 
 
 def check_secret_patterns(tracked_files, errors):
     for relpath in tracked_files:
+        full_path = f"{REPO_ROOT}/{relpath}"
         try:
-            with open(f"{REPO_ROOT}/{relpath}", "r", encoding="utf-8", errors="ignore") as f:
+            if os.path.getsize(full_path) > MAX_SCANNED_FILE_BYTES:
+                continue
+            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                 text = f.read()
         except (OSError, IsADirectoryError):
             continue
 
         for match in SECRET_ASSIGNMENT_RE.finditer(text):
             var_name = match.group(1)
-            value = next(g for g in match.groups()[1:] if g is not None)
-            if var_name in ALLOWED_ENV_VAR_NAMES and looks_like_placeholder(value):
+            value = strip_quotes(match.group(2))
+
+            if looks_like_placeholder(value):
                 continue
+
             if var_name in ALLOWED_ENV_VAR_NAMES:
                 # A documented var name followed by a real-looking value is still
                 # suspicious — flag it rather than silently trust the allowlist.
@@ -110,6 +122,7 @@ def check_secret_patterns(tracked_files, errors):
                     f"(value: '{value[:4]}...' truncated) — use a placeholder in docs"
                 )
                 continue
+
             errors.append(f"{relpath}: possible secret assignment matching '{var_name}'")
 
         if PRIVATE_KEY_RE.search(text):
@@ -117,38 +130,29 @@ def check_secret_patterns(tracked_files, errors):
 
 
 def check_personal_paths_not_tracked(tracked_files, errors):
-    personal_prefixes = ("profile/", "itineraries/", "watchlist/", "trip_scraper/", "documents/")
-    for relpath in tracked_files:
-        if relpath == "trip_tracker.csv":
-            errors.append(f"{relpath}: personal tracker file is tracked in git — should be gitignored")
-            continue
-        if relpath == ".env":
-            errors.append(f"{relpath}: .env is tracked in git — should be gitignored")
-            continue
-        for prefix in personal_prefixes:
-            if relpath.startswith(prefix):
-                # Allow documented scaffolding: READMEs and .gitkeep placeholders.
-                base = relpath.rsplit("/", 1)[-1]
-                if base in {"README.md", ".gitkeep"}:
-                    continue
-                errors.append(f"{relpath}: tracked file under personal path '{prefix}' — should be gitignored")
+    # A tracked file that matches a .gitignore pattern (e.g. force-added with
+    # `git add -f`) is exactly the leak this check exists to catch. Ask git
+    # directly rather than restating .gitignore's prefixes here — .gitignore
+    # is the single source of truth, and its README/.gitkeep negation
+    # patterns already exempt the documented scaffolding.
+    # `no_index=True` is essential: without it git reports nothing for a
+    # tracked path (tracking beats .gitignore), so this check would pass
+    # unconditionally and catch no leaks at all.
+    for relpath in sorted(ignored_paths(tracked_files, root=REPO_ROOT, no_index=True)):
+        errors.append(f"{relpath}: tracked file matches a .gitignore pattern — should be gitignored (untrack it)")
 
 
 def check_gitignore_coverage(errors):
     gitignore_path = f"{REPO_ROOT}/.gitignore"
-    import os
 
     if not os.path.isfile(gitignore_path):
         errors.append(".gitignore: file does not exist — must cover personal paths (profile/, itineraries/, watchlist/, trip_scraper/, trip_tracker.csv, documents/ contents, .env)")
         return
 
+    covered = ignored_paths(PERSONAL_PATHS, root=REPO_ROOT)
     for sample in PERSONAL_PATHS:
-        result = run(["git", "check-ignore", "-q", sample])
-        # check-ignore exit codes: 0 = ignored, 1 = not ignored, 128 = error (e.g. path doesn't exist is fine, check-ignore doesn't require existence)
-        if result.returncode == 1:
+        if sample not in covered:
             errors.append(f".gitignore: does not ignore personal path '{sample}' (git check-ignore reported not ignored)")
-        elif result.returncode not in (0, 1):
-            errors.append(f".gitignore: git check-ignore errored on '{sample}': {result.stderr.strip()}")
 
 
 def main():
@@ -156,8 +160,13 @@ def main():
 
     tracked_files = git_ls_files()
     check_secret_patterns(tracked_files, errors)
-    check_personal_paths_not_tracked(tracked_files, errors)
-    check_gitignore_coverage(errors)
+    try:
+        check_personal_paths_not_tracked(tracked_files, errors)
+        check_gitignore_coverage(errors)
+    except RuntimeError as e:
+        # A git failure means ignore-status could not be determined — treat
+        # that as a hard error, never as a silent pass.
+        errors.append(f"could not determine git-ignore status: {e}")
 
     if errors:
         sys.stderr.write("security_guards.py: FAILED\n")

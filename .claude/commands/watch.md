@@ -30,8 +30,8 @@ If this run needs profile data (e.g. resolving `<trip>` against profile-derived 
 
 ### `/watch add <trip>`
 1. Identify the trip: use `<trip>` to match a recent `/scrape` result or the destination/dates from a just-completed `/plan` run. If ambiguous, ask the user which trip they mean.
-2. Derive a slug per `.claude/skills/price-watch/SKILL.md` — the authoritative source for slug derivation: `{destination}-{depart_date}-{return_date}` (e.g. `porto-portugal-2026-10-14-2026-10-19`), appending a short source tag if the same destination/dates are watched from two different sources.
-3. Read `.claude/skills/price-watch/SKILL.md` for the exact JSON shape expected in `watchlist/<slug>.json` and follow it precisely — at minimum it must capture: destination, dates, source, the snapshot price and currency, the search parameters needed to re-run the same query, and a price history array seeded with this first entry (timestamp + price).
+2. Derive the slug per `.claude/skills/price-watch/SKILL.md` — the authoritative source for slug derivation.
+3. Read `.claude/skills/price-watch/SKILL.md` for the exact JSON shape expected in `watchlist/<slug>.json` and follow it precisely.
 4. Write `watchlist/<slug>.json`. If a file for that slug already exists, ask before overwriting.
 5. Confirm to the user what was saved and under which slug.
 
@@ -44,7 +44,7 @@ If this run needs profile data (e.g. resolving `<trip>` against profile-derived 
 1. List every `watchlist/*.json` file. If none exist, tell the user the watchlist is empty and suggest `/watch add <trip>` after a `/scrape` or `/plan` run.
 2. For each watched trip:
    - Read its stored search parameters (route, dates, source).
-   - Re-run the relevant `.agents/skills/*/search.py --json` adapter(s) for that same route/dates (falling back to web search on missing-credentials, same as `/scrape`).
+   - Re-run the relevant `.agents/skills/*/search.py --json` adapter(s) for that same route/dates (falling back to web search when the adapter reports the no-credentials protocol — exit code 2, `status == "no_credentials"`, per `.claude/skills/trip-scraper/SKILL.md` — same as `/scrape`).
    - Compare the new price against the most recent entry in the trip's price history.
    - Classify the result: price drop, price rise, unchanged, or sold-out/unavailable.
    - Append the new observation (timestamp, price, currency, availability) to the trip's price history array in `watchlist/<slug>.json`.

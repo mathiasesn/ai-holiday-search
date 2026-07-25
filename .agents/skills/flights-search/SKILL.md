@@ -46,24 +46,11 @@ plain text).
 
 ## Result shape
 
-Every result is a normalized record, shared across all three `.agents/skills/*`
-adapters:
-
-```json
-{
-  "source": "flights-search",
-  "title": "Flight offer 1",
-  "url": null,
-  "price": 412.30,
-  "currency": "EUR",
-  "price_per_person": 206.15,
-  "dates": {"depart": "2026-10-12", "return": "2026-10-19"},
-  "details": {"id": "1", "numberOfBookableSeats": 4, "itineraries": [...]}
-}
-```
-
-`--json` with no matches prints `[]`. `details` is free-form and carries the raw
-Amadeus itinerary segments for anyone who wants flight-number-level detail.
+Each result has `source`, `title`, `url`, `price`, `currency`, `price_per_person`,
+`dates` (`{depart, return}`), and free-form `details` (here: raw Amadeus itinerary
+segments). See `.claude/skills/trip-scraper/SKILL.md` ("Adapter result record") for
+the authoritative field-by-field definition, shared across all three
+`.agents/skills/*` adapters. `--json` with no matches prints `[]`.
 
 ## Fallback behavior
 
@@ -71,10 +58,12 @@ If `AMADEUS_API_KEY` or `AMADEUS_API_SECRET` is unset, the CLI does **not** atte
 network call. It prints a machine-readable status and exits **2**:
 
 ```json
-{"status": "no_credentials", "message": "...", "fallback": "web_search", "results": []}
+{"status": "no_credentials", "reason": "missing_api_credentials", "message": "...", "fallback": "web_search", "results": []}
 ```
 
-Callers (e.g. `/scrape`) should treat exit code `2` as "use Claude web search for
+This is the adapter no-credentials protocol — see `.claude/skills/trip-scraper/SKILL.md` for the
+authoritative shape shared by all three adapters. Callers (e.g. `/scrape`) should treat exit code
+`2` as "use Claude web search for
 flights on this route instead of failing the run." Exit code `1` means a genuine
 failure (bad arguments, network/HTTP error) and should be reported, not silently
 swallowed. Exit code `0` means success (including a valid empty result set).

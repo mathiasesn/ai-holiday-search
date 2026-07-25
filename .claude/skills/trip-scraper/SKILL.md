@@ -27,13 +27,49 @@ python .agents/skills/packages-search/search.py --json <args>
 ```
 
 - Each adapter is stdlib+`requests`, supports `--help`, and exits non-zero on failure.
-- **Missing credentials:** an adapter that needs an API key it doesn't have (e.g. no
-  `AMADEUS_API_KEY`) exits with a distinct non-zero "no credentials" status and a message on
-  stderr. On that exit, do **not** treat it as a hard failure — fall back to Claude's own web
-  search for that source, using the same query parameters, and normalize the results the same
-  way.
+- **Missing credentials — the adapter protocol (authoritative here):** when an adapter needs
+  credentials/config it doesn't have (e.g. no `AMADEUS_API_KEY`), it MUST print exactly one JSON
+  object to stdout and exit with code **2**:
+
+  ```json
+  {"status": "no_credentials", "reason": "<machine token>", "message": "<human sentence>", "fallback": "web_search", "results": []}
+  ```
+
+  - `status` is always the literal `"no_credentials"`.
+  - `reason` is a per-adapter machine token distinguishing *why* (e.g.
+    `missing_api_credentials`, `no_source_configured`, `no_operator_configured`) — do not match
+    on this for control flow, only `status` and the exit code.
+  - `message` is a human-readable sentence for display.
+  - `fallback` is always `"web_search"`.
+  - `results` is always `[]`.
+
+  Any forked or new adapter under `.agents/skills/` MUST emit this exact shape on its
+  no-credentials path. On exit code 2 with `status == "no_credentials"`, do **not** treat it as a
+  hard failure — fall back to Claude's own web search for that source, using the same query
+  parameters, and normalize the results the same way.
 - Any other non-zero exit is a real failure: report it, skip that source for this run, continue
   with the others.
+
+## Adapter result record (authoritative)
+
+Each `.agents/skills/*/search.py` adapter's `--json` output is a JSON array of records in this
+exact shape (this is the single authority for this record — adapter `SKILL.md` files and module
+docstrings only summarize it and point back here):
+
+| Field              | Type            | Notes                                                        |
+|---------------------|-----------------|---------------------------------------------------------------|
+| `source`            | `str`           | Adapter name, e.g. `"flights-search"`.                        |
+| `title`              | `str`           | Human-readable listing title.                                 |
+| `url`                | `str \| None`   | Listing URL, or `null` if the source doesn't provide one.      |
+| `price`              | `float`         | Total price for the listing.                                  |
+| `currency`           | `str`           | ISO currency code, e.g. `"EUR"`.                               |
+| `price_per_person`   | `float`         | `price` divided by the relevant traveler count.                |
+| `dates`              | `dict`          | `{"depart", "return"}` for flights/packages, `{"check_in", "check_out"}` for stays. |
+| `details`            | `dict`          | Free-form, source-specific extra fields.                       |
+
+`--json` with no matches prints `[]`. This record is distinct from the post-fan-out "Normalized
+candidate record" below, which `trip-scraper` produces by merging one or more of these adapter
+records with destination/trip context for scoring.
 
 ## Paste-a-listing fallback
 

@@ -13,20 +13,25 @@ Checks (stdlib only, no PyYAML):
 
 Exit 0 on success; non-zero with actionable per-file messages on failure.
 """
+import json
 import os
 import re
-import stat
+import subprocess
 import sys
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+from _repo import repo_root, ignored_paths
+
+REPO_ROOT = repo_root()
 
 MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+URL_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
 BACKTICK_PATH_RE = re.compile(r"`([^`\s]+\.(?:md|py))`")
-
-# Runtime paths under these prefixes are gitignored personal data written by
-# /setup, /scrape, /watch, /plan — they're expected to be absent from a clean
-# tracked tree, so backticked references to them aren't broken links.
-PERSONAL_PATH_PREFIXES = ("profile/", "itineraries/", "watchlist/", "trip_scraper/", "documents/")
+# Only treat a backticked string as a literal repo-relative path reference if
+# it looks like one: word/dot/slash/dash characters only, at least one path
+# separator, ending in .md or .py. Anything else (placeholder syntax like
+# `<name>`, `foo/*.md`, `{a,b}.py`, `...`) is left alone rather than
+# special-cased — new doc notations no longer need a matching lint update.
+LITERAL_PATH_RE = re.compile(r"^[\w./-]+\.(?:md|py)$")
 
 
 def find_files(patterns_root, filename):
@@ -40,7 +45,7 @@ def find_files(patterns_root, filename):
     return results
 
 
-def parse_frontmatter(path, errors=None):
+def parse_frontmatter(path, errors):
     """Hand-rolled minimal YAML frontmatter parser: returns dict of top-level
     scalar string keys, or None if no frontmatter block is present.
 
@@ -85,39 +90,19 @@ def parse_frontmatter(path, errors=None):
         if line[:1].isspace() and last_key is not None:
             # Continuation of the previous value (e.g. wrapped multi-line text).
             continue
-        if errors is not None:
-            errors.append(f"{rel}:{line_no}: malformed frontmatter line (not 'key: value', a comment, blank, or a continuation): {stripped!r}")
-        else:
-            continue
+        errors.append(f"{rel}:{line_no}: malformed frontmatter line (not 'key: value', a comment, blank, or a continuation): {stripped!r}")
 
     body = "\n".join(lines[end_idx + 1 :])
     return fm, body
 
 
-def check_skill_file(path, errors):
-    fm, body = parse_frontmatter(path, errors)
-    dir_name = os.path.basename(os.path.dirname(path))
-    rel = os.path.relpath(path, REPO_ROOT)
+def check_frontmatter_file(path, errors, required_keys):
+    """Validate a file's frontmatter has non-empty values for `required_keys`.
 
-    if fm is None:
-        errors.append(f"{rel}: missing or malformed YAML frontmatter (expected leading '---' block)")
-        return body
-
-    name = fm.get("name", "")
-    description = fm.get("description", "")
-
-    if not name:
-        errors.append(f"{rel}: frontmatter missing non-empty 'name'")
-    elif name != dir_name:
-        errors.append(f"{rel}: frontmatter name '{name}' does not match parent directory name '{dir_name}'")
-
-    if not description:
-        errors.append(f"{rel}: frontmatter missing non-empty 'description'")
-
-    return body
-
-
-def check_command_file(path, errors):
+    If `name` is among the required keys, it must also match the parent
+    directory name (SKILL.md convention). Used for both SKILL.md and command
+    files — they differ only in which keys are required.
+    """
     fm, body = parse_frontmatter(path, errors)
     rel = os.path.relpath(path, REPO_ROOT)
 
@@ -125,9 +110,14 @@ def check_command_file(path, errors):
         errors.append(f"{rel}: missing or malformed YAML frontmatter (expected leading '---' block)")
         return body
 
-    description = fm.get("description", "")
-    if not description:
-        errors.append(f"{rel}: frontmatter missing non-empty 'description'")
+    for key in required_keys:
+        value = fm.get(key, "")
+        if not value:
+            errors.append(f"{rel}: frontmatter missing non-empty '{key}'")
+        elif key == "name":
+            dir_name = os.path.basename(os.path.dirname(path))
+            if value != dir_name:
+                errors.append(f"{rel}: frontmatter name '{value}' does not match parent directory name '{dir_name}'")
 
     return body
 
@@ -140,7 +130,7 @@ def check_links(path, body, errors):
         # Skip external links, anchors, and mailto/absolute-url schemes.
         if not target or target.startswith("#"):
             continue
-        if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", target):
+        if URL_SCHEME_RE.match(target):
             continue
         if target.startswith("mailto:"):
             continue
@@ -152,21 +142,28 @@ def check_links(path, body, errors):
         if not os.path.exists(resolved):
             errors.append(f"{rel}: relative link target does not exist: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
 
+    backtick_targets = []
     for match in BACKTICK_PATH_RE.finditer(body):
         target = match.group(1)
-        if "/" not in target:
+        # Only validate backticked strings that look like literal
+        # repo-relative paths (word/dot/slash/dash chars, contains a '/',
+        # ends .md/.py). Placeholder notation (`<name>`, `foo/*.md`,
+        # `{a,b}.py`, `...`) doesn't match and is left alone.
+        if "/" not in target or not LITERAL_PATH_RE.fullmatch(target):
             continue
-        # Skip obviously illustrative/placeholder paths (angle brackets, globs,
-        # brace-expansion lists, ellipsis).
-        if any(ch in target for ch in ("<", ">", "*", "{", "}")) or "..." in target:
-            continue
-        # Skip paths under gitignored personal-data dirs — these are runtime
-        # paths written by /setup, /scrape, /watch, /plan, never tracked in git.
-        if target.startswith(PERSONAL_PATH_PREFIXES):
-            continue
-        resolved = os.path.normpath(os.path.join(REPO_ROOT, target))
-        if not os.path.exists(resolved):
-            errors.append(f"{rel}: backticked repo-relative path does not exist: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
+        backtick_targets.append(target)
+
+    if backtick_targets:
+        ignored = ignored_paths(backtick_targets, root=REPO_ROOT)
+        for target in backtick_targets:
+            # Skip paths under gitignored personal-data dirs — these are
+            # runtime paths written by /setup, /scrape, /watch, /plan, never
+            # tracked in git.
+            if target in ignored:
+                continue
+            resolved = os.path.normpath(os.path.join(REPO_ROOT, target))
+            if not os.path.exists(resolved):
+                errors.append(f"{rel}: backticked repo-relative path does not exist: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
 
 
 def check_agents_skills_structure(errors):
@@ -189,6 +186,87 @@ def check_agents_skills_structure(errors):
             errors.append(f"{rel}/search.py: not executable (chmod +x)")
 
 
+def check_adapter_contract(errors):
+    """Assert the three .agents/skills/*/search.py adapters agree on their
+    no-credentials contract.
+
+    A shared adapter module was deliberately rejected (it would break the
+    documented copy-a-folder fork workflow), so the three adapters stay
+    intentionally near-duplicated. This guards the duplication instead:
+    each adapter's `--json` no-credentials path (run with credentials env
+    vars unset) must exit 2, print exactly one JSON object, and every
+    adapter must agree on the same top-level key set, `status` ==
+    "no_credentials", and `fallback` == "web_search".
+    """
+    agents_skills_dir = os.path.join(REPO_ROOT, ".agents", "skills")
+    if not os.path.isdir(agents_skills_dir):
+        return
+
+    env_vars_to_unset = (
+        "AMADEUS_API_KEY",
+        "AMADEUS_API_SECRET",
+        "STAYS_API_KEY",
+        "STAYS_API_URL",
+        "PACKAGES_API_KEY",
+        "PACKAGES_API_URL",
+    )
+
+    contracts = []  # list of (rel, keys_set, status, fallback)
+    for entry in sorted(os.listdir(agents_skills_dir)):
+        search_py = os.path.join(agents_skills_dir, entry, "search.py")
+        if not os.path.isfile(search_py):
+            continue
+        rel = os.path.relpath(search_py, REPO_ROOT)
+
+        env = {k: v for k, v in os.environ.items() if k not in env_vars_to_unset}
+        try:
+            result = subprocess.run(
+                ["python3", search_py, "--json"],
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired) as e:
+            errors.append(f"{rel}: failed to execute no-credentials path: {e}")
+            continue
+
+        if result.returncode != 2:
+            errors.append(f"{rel}: no-credentials path exited {result.returncode}, expected 2")
+            continue
+
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as e:
+            errors.append(f"{rel}: no-credentials path did not print one JSON object: {e}")
+            continue
+
+        if not isinstance(payload, dict):
+            errors.append(f"{rel}: no-credentials JSON output is not an object")
+            continue
+
+        contracts.append((rel, frozenset(payload.keys()), payload.get("status"), payload.get("fallback")))
+
+    if not contracts:
+        return
+
+    ref_rel, ref_keys, ref_status, ref_fallback = contracts[0]
+    if ref_status != "no_credentials":
+        errors.append(f"{ref_rel}: no-credentials JSON 'status' is {ref_status!r}, expected 'no_credentials'")
+    if ref_fallback != "web_search":
+        errors.append(f"{ref_rel}: no-credentials JSON 'fallback' is {ref_fallback!r}, expected 'web_search'")
+
+    for rel, keys, status, fallback in contracts[1:]:
+        if keys != ref_keys:
+            errors.append(
+                f"{rel}: no-credentials JSON keys {sorted(keys)} differ from {ref_rel}'s {sorted(ref_keys)}"
+            )
+        if status != "no_credentials":
+            errors.append(f"{rel}: no-credentials JSON 'status' is {status!r}, expected 'no_credentials'")
+        if fallback != "web_search":
+            errors.append(f"{rel}: no-credentials JSON 'fallback' is {fallback!r}, expected 'web_search'")
+
+
 def main():
     errors = []
 
@@ -196,7 +274,7 @@ def main():
     skill_files += find_files(os.path.join(REPO_ROOT, ".agents", "skills"), "SKILL.md")
 
     for path in sorted(set(skill_files)):
-        body = check_skill_file(path, errors)
+        body = check_frontmatter_file(path, errors, required_keys=("name", "description"))
         check_links(path, body, errors)
 
     commands_dir = os.path.join(REPO_ROOT, ".claude", "commands")
@@ -205,10 +283,11 @@ def main():
             if not name.endswith(".md"):
                 continue
             path = os.path.join(commands_dir, name)
-            body = check_command_file(path, errors)
+            body = check_frontmatter_file(path, errors, required_keys=("description",))
             check_links(path, body, errors)
 
     check_agents_skills_structure(errors)
+    check_adapter_contract(errors)
 
     if errors:
         sys.stderr.write("lint_skills.py: FAILED\n")

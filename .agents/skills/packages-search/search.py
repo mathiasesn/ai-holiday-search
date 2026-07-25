@@ -29,24 +29,16 @@ Exit codes:
 Never prints or logs secrets (e.g. PACKAGES_API_KEY), including in error
 messages.
 
-Normalized result record shape (see SKILL.md for the authoritative doc):
-  {
-    "source": "packages-search",
-    "title": str,
-    "url": str | None,
-    "price": float,
-    "currency": str,
-    "price_per_person": float,
-    "dates": {"depart": "YYYY-MM-DD", "return": "YYYY-MM-DD" | None},
-    "details": {...free-form, operator-specific...}
-  }
+Result record: source, title, url, price, currency, price_per_person, dates
+(depart/return), details (free-form, operator-specific). Authoritative shape:
+.claude/skills/trip-scraper/SKILL.md ("Adapter result record").
 """
 import argparse
 import json
 import os
 import sys
 
-NO_OPERATOR_EXIT = 2
+NO_CREDENTIALS_EXIT = 2
 FAILURE_EXIT = 1
 
 
@@ -82,7 +74,8 @@ def get_operator_config():
 
 def no_operator_response():
     return {
-        "status": "no_operator_configured",
+        "status": "no_credentials",
+        "reason": "no_operator_configured",
         "message": (
             "No package/charter operator is configured (PACKAGES_API_URL is not set). "
             "This is a template skill — fork it for your local operator, or fall back "
@@ -132,12 +125,7 @@ def parse_results(payload):
     "depart_date": ..., "return_date": ...}, ...]} — replace entirely to match
     your real operator's response shape.
     """
-    if isinstance(payload, dict):
-        items = payload.get("packages", [])
-    elif isinstance(payload, list):
-        items = payload
-    else:
-        items = []
+    items = payload.get("packages", []) if isinstance(payload, dict) else payload
     if not isinstance(items, list):
         raise ValueError("packages-search: parse_results() expected a list of package items")
     return items
@@ -180,7 +168,7 @@ def main(argv=None):
             print(json.dumps(payload))
         else:
             print(payload["message"])
-        return NO_OPERATOR_EXIT
+        return NO_CREDENTIALS_EXIT
 
     missing = [n for n in ("destination", "depart") if not getattr(args, n)]
     if missing:
@@ -197,9 +185,6 @@ def main(argv=None):
     try:
         raw = fetch_packages(api_url, api_key, args, requests)
         items = parse_results(raw)
-    except requests.exceptions.RequestException as exc:
-        sys.stderr.write(f"packages-search: network/HTTP error while contacting operator: {exc.__class__.__name__}\n")
-        return FAILURE_EXIT
     except Exception as exc:  # noqa: BLE001
         sys.stderr.write(f"packages-search: request failed: {exc.__class__.__name__}\n")
         return FAILURE_EXIT

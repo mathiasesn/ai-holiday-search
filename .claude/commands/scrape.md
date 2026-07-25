@@ -34,7 +34,7 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 
 4. **Invoke search adapters.** For each of `.agents/skills/flights-search/search.py`, `.agents/skills/stays-search/search.py`, `.agents/skills/packages-search/search.py`:
    - Run it with `--json` and the query parameters from step 3, via `python <path>/search.py --json <args>`.
-   - If the CLI exits non-zero reporting missing credentials (e.g. no `AMADEUS_API_KEY`), fall back to Claude's own web search for that source instead of failing the whole run — note in the final output which sources used the API vs. web-search fallback.
+   - If the CLI exits with code 2 and prints a JSON object with `status == "no_credentials"` (the adapter protocol defined in `.claude/skills/trip-scraper/SKILL.md`), fall back to Claude's own web search for that source instead of failing the whole run — note in the final output which sources used the API vs. web-search fallback.
    - Collect all raw candidates from all three sources.
 
 5. **Deduplicate.** Read `trip_scraper/seen.json` (if absent, treat it as `{"schema_version": 1, "entries": {}}` — when writing it for the first time, include `schema_version`). Derive each candidate's dedupe key exactly as specified in `.claude/skills/trip-scraper/SKILL.md` — that file is the authority on the key derivation and the file format; do not invent an ad hoc match. For each candidate:

@@ -43,24 +43,11 @@ Flags: `--destination`, `--check-in` / `--check-out` (YYYY-MM-DD), `--guests`
 
 ## Result shape
 
-Every result is a normalized record, shared across all three `.agents/skills/*`
-adapters:
-
-```json
-{
-  "source": "stays-search",
-  "title": "Seaside Apartment, Lisbon",
-  "url": "https://example.com/listing/123",
-  "price": 840.0,
-  "currency": "EUR",
-  "price_per_person": 420.0,
-  "dates": {"check_in": "2026-10-12", "check_out": "2026-10-19"},
-  "details": {"rating": 4.6, "board": "self-catering"}
-}
-```
-
-`--json` with no matches prints `[]`. `details` carries whatever extra fields the
-configured source returns beyond the normalized core.
+Each result has `source`, `title`, `url`, `price`, `currency`, `price_per_person`,
+`dates` (`{check_in, check_out}`), and free-form `details` (whatever extra fields the
+configured source returns). See `.claude/skills/trip-scraper/SKILL.md` ("Adapter
+result record") for the authoritative field-by-field definition, shared across all
+three `.agents/skills/*` adapters. `--json` with no matches prints `[]`.
 
 ## Fallback behavior
 
@@ -68,10 +55,12 @@ If `STAYS_API_URL` is unset, the CLI does not attempt a network call. It prints 
 machine-readable status and exits **2**:
 
 ```json
-{"status": "no_source_configured", "message": "...", "fallback": "web_search", "results": []}
+{"status": "no_credentials", "reason": "no_source_configured", "message": "...", "fallback": "web_search", "results": []}
 ```
 
-Callers (e.g. `/scrape`) should treat exit code `2` as "use Claude web search for
+This is the adapter no-credentials protocol — see `.claude/skills/trip-scraper/SKILL.md` for the
+authoritative shape shared by all three adapters. Callers (e.g. `/scrape`) should treat exit code
+`2` as "use Claude web search for
 stays in this destination instead of failing the run," and use the paste-a-listing
 path in `/plan` for any specific listing the user finds manually. Exit code `1` means
 a genuine failure (bad arguments, network/HTTP error against a configured source) and

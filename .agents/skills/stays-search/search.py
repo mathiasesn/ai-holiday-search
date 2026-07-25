@@ -16,24 +16,16 @@ Exit codes:
 
 Never prints or logs secrets (e.g. STAYS_API_KEY), including in error messages.
 
-Normalized result record shape (see SKILL.md for the authoritative doc):
-  {
-    "source": "stays-search",
-    "title": str,
-    "url": str | None,
-    "price": float,
-    "currency": str,
-    "price_per_person": float,
-    "dates": {"check_in": "YYYY-MM-DD", "check_out": "YYYY-MM-DD"},
-    "details": {...free-form...}
-  }
+Result record: source, title, url, price, currency, price_per_person, dates
+(check_in/check_out), details (free-form). Authoritative shape:
+.claude/skills/trip-scraper/SKILL.md ("Adapter result record").
 """
 import argparse
 import json
 import os
 import sys
 
-NO_SOURCE_EXIT = 2
+NO_CREDENTIALS_EXIT = 2
 FAILURE_EXIT = 1
 
 
@@ -71,7 +63,8 @@ def get_source_config():
 
 def no_source_response():
     return {
-        "status": "no_source_configured",
+        "status": "no_credentials",
+        "reason": "no_source_configured",
         "message": (
             "No stays source is configured (STAYS_API_URL is not set). "
             "Fall back to Claude web search + paste-a-listing for accommodation."
@@ -137,7 +130,7 @@ def main(argv=None):
             print(json.dumps(payload))
         else:
             print(payload["message"])
-        return NO_SOURCE_EXIT
+        return NO_CREDENTIALS_EXIT
 
     missing = [n for n in ("destination", "check_in", "check_out") if not getattr(args, n)]
     if missing:
@@ -153,9 +146,6 @@ def main(argv=None):
     api_url, api_key = config
     try:
         raw = fetch_stays(api_url, api_key, args, requests)
-    except requests.exceptions.RequestException as exc:
-        sys.stderr.write(f"stays-search: network/HTTP error while contacting stays source: {exc.__class__.__name__}\n")
-        return FAILURE_EXIT
     except Exception as exc:  # noqa: BLE001
         sys.stderr.write(f"stays-search: request failed: {exc.__class__.__name__}\n")
         return FAILURE_EXIT
