@@ -205,11 +205,7 @@ Adding a source = copying a skill folder, pointing it at a site or API, and desc
 
 ## Roadmap
 
-- [ ] `/pack` — profile-aware packing list generation per trip
-- [ ] Multi-destination trips (open-jaw flights, rail legs)
-- [ ] Calendar export (.ics) of final itineraries
-- [ ] Community skills for national charter operators
-- [ ] PDF/LaTeX itinerary compilation (Markdown output is the default; PDF is optional future tooling)
+Planned features and known engineering debt live in [BACKLOG.md](BACKLOG.md).
 
 ## License
 
