@@ -38,7 +38,7 @@
 | flights-search     | yes                 |
 | stays-search        | yes                 |
 | packages-search     | yes, if configured for your local operators |
-| trivago-search      | yes, if an attended browser session is available (else degrades to web search) |
+| trivago-search      | yes (needs an attended browser session; else degrades to web search) |
 
 ## Home airport(s)
 

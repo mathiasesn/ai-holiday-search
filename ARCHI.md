@@ -210,15 +210,13 @@ On exit 2 with `--json`, the adapter prints **exactly one JSON object**:
 
 This is **distinct from** the "normalized candidate record" that `trip-scraper` builds by merging adapter records with destination/trip context before scoring.
 
-**Carve-out: a source may instead be browser-driven.** Not every source is a `.agents/skills/*`
-CLI adapter under the exit-code protocol above — `trivago-search` (`.claude/skills/`) is
-Markdown-only, has no `search.py` and no exit code, and defines its own multi-step fallback chain
-instead. The exit-code protocol above remains load-bearing and unchanged for CLI adapters; this
-carve-out only exempts browser-driven sources from it.
+**Carve-out: a source may instead be browser-driven** (like `trivago-search`, `.claude/skills/`, Markdown-only, no `search.py`/exit code, its own fallback chain) — the exit-code protocol above remains load-bearing and unchanged for CLI adapters; this only exempts browser-driven sources from it.
 
 ### Adding a new source
 
-Copy an existing adapter folder, rename it, update `SKILL.md` frontmatter `name` to match the new directory, point `search.py` at your API, keep the exit-code protocol and result-record shape exactly, add any new credential env vars to `ADAPTER_CRED_VARS` in the CI workflow and to `ALLOWED_ENV_VAR_NAMES` in `tools/security_guards.py`, and `chmod +x search.py`. Do not introduce a shared import.
+**CLI adapter:** copy an existing adapter folder, rename it, update `SKILL.md` frontmatter `name` to match the new directory, point `search.py` at your API, keep the exit-code protocol and result-record shape exactly, add any new credential env vars to `ADAPTER_CRED_VARS` in the CI workflow and to `ALLOWED_ENV_VAR_NAMES` in `tools/security_guards.py`, and `chmod +x search.py`. Do not introduce a shared import.
+
+**Browser-driven source:** add a Markdown-only skill under `.claude/skills/` — no `search.py`, no exit code. Define its own fallback chain, normalize results into the same result record as CLI adapters, and register it in both `search-queries.md`'s source table and `trip-scraper`'s fan-out step.
 
 ---
 
@@ -274,7 +272,7 @@ Commands are procedure; skills are reference. A command file states its inputs, 
 | Command | Reads | Writes | Shape |
 |---|---|---|---|
 | `/setup` | `documents/`, `$ARGUMENTS`, holiday-planner templates | `profile/01…06-*.md`, `trip_tracker.csv` | 3 modes (documents / pasted text / interview), auto-detected; asks rather than picking silently; documents-mode is idempotent and merges |
-| `/scrape` | `profile/`, `search-queries.md`, adapters, `trivago-search/SKILL.md`, `trip_scraper/seen.json` | `trip_scraper/seen.json` | Fan out (including a browser-driven `trivago-search` run via `claude-in-chrome` MCP tools, now in its `allowed-tools`) → normalize → dedupe → score → present sorted by fit with per-criterion reasoning |
+| `/scrape` | `profile/`, `search-queries.md`, adapters, `trivago-search/SKILL.md`, `trip_scraper/seen.json` | `trip_scraper/seen.json` | Fan out (including a browser-driven `trivago-search` run via `claude-in-chrome` MCP tools, in its `allowed-tools`) → normalize → dedupe → score → present sorted by fit with per-criterion reasoning |
 | `/plan` | `profile/`, holiday-planner 03/04/05 | `itineraries/<trip-slug>/itinerary.md` | 7 explicit steps, see below |
 | `/watch` | `watchlist/*.json`, adapters | `watchlist/<slug>.json` | `add` / `remove` / no-args re-check |
 | `/reset` | — | deletes `profile/`, `watchlist/`, `trip_tracker.csv` | Requires typing `RESET`; touches only gitignored state |

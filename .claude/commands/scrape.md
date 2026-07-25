@@ -24,7 +24,8 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 - Reads: everything under Inputs above.
 - Writes: `trip_scraper/seen.json` (append newly seen candidates), and a results snapshot under `trip_scraper/` (e.g. `trip_scraper/results-<date>.json`) for this run's output.
 - Never writes or edits `profile/` files — only `/setup` does.
-- Opens a browser tab (via `claude-in-chrome`) on every run, for the `trivago-search` step.
+- Opens a browser tab (via `claude-in-chrome`) for the `trivago-search` step, but only on runs
+  whose resolved query has a stay component (not on flights-only or packages-only runs).
 
 ## Steps
 
@@ -39,12 +40,13 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
    - If the CLI exits with code 2 and prints a JSON object with `status == "no_credentials"` (the adapter protocol defined in `.claude/skills/trip-scraper/SKILL.md`), fall back to Claude's own web search for that source instead of failing the whole run — note in the final output which sources used the API vs. web-search fallback.
    - Collect all raw candidates from all three sources.
 
-   Also run `trivago-search` as a second, first-class stays source, following
-   `.claude/skills/trivago-search/SKILL.md`. It has no CLI and no exit code, so it can't fail this
-   way — instead it follows its own fallback chain, defined authoritatively in that skill's
-   `SKILL.md` (do not re-enumerate the triggers here). The run must complete even when Chrome is
-   unavailable. Note in the final output which sources used a live source (API or browser) vs. a
-   fallback.
+   If the resolved query for this run has a stay component (i.e. it isn't a flights-only or
+   packages-only run), also run `trivago-search` as a second, first-class stays source,
+   following `.claude/skills/trivago-search/SKILL.md`. It has no CLI and no exit code, so it
+   can't fail this way — instead it follows its own fallback chain, defined authoritatively in
+   that skill's `SKILL.md` (do not re-enumerate the triggers here). The run must complete even
+   when Chrome is unavailable. Note in the final output which sources used a live source (API or
+   browser) vs. a fallback.
 
 5. **Deduplicate.** Read `trip_scraper/seen.json` (if absent, treat it as `{"schema_version": 1, "entries": {}}` — when writing it for the first time, include `schema_version`). Derive each candidate's dedupe key exactly as specified in `.claude/skills/trip-scraper/SKILL.md` — that file is the authority on the key derivation and the file format; do not invent an ad hoc match. For each candidate:
    - If its key is **not** present in `entries`, it's genuinely new — keep it for scoring and presentation.
@@ -53,7 +55,7 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 
 6. **Score each candidate.** Apply the scoring framework in `.claude/skills/holiday-planner/03-trip-evaluation.md` against the (merged) profile for every new candidate. Produce a fit score and the concrete reasoning behind it (which criteria it satisfies, which it violates, e.g. "fits budget and pace but exceeds max travel time by 40 minutes").
 
-7. **Present results.** Sort by fit score, descending. For each candidate show: destination, dates, price per person (state currency, EUR default), source, fit score, and the reasoning from step 6. Rank a cheaper trip that violates a dealbreaker below a pricier one that fits — never let price alone determine order. Where the same property was surfaced by both `trivago-search` and `stays-search`, collapse it into one entry showing the lower price and naming both sources, per `.claude/skills/trip-scraper/SKILL.md`.
+7. **Present results.** Sort by fit score, descending. For each candidate show: destination, dates, price per person (state currency, EUR default), source, fit score, and the reasoning from step 6. Rank a cheaper trip that violates a dealbreaker below a pricier one that fits — never let price alone determine order. Where the same property was surfaced by more than one enabled source, collapse it into one entry showing the lower price and naming all sources involved, per `.claude/skills/trip-scraper/SKILL.md`.
 
 8. **Offer next actions.** After presenting the list, ask the user whether to:
    - Run `/plan <pick>` on one of the results, or

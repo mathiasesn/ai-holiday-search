@@ -18,10 +18,10 @@ credentials, no env vars, no login, no booking. Stays only — no flights, no ca
 
 Steps below are written as capabilities, each with the concrete tool that implements it today.
 
-**Default driver: `claude-in-chrome`.** Before first use, call `tabs_context_mcp`, then always
-create a **new** tab with `tabs_create_mcp` rather than reusing an existing one. Never trigger
-JS dialogs. After 2-3 consecutive tool failures on any step, stop retrying and drop to the
-fallback chain below.
+**Default driver: `claude-in-chrome`.** Standard Chrome-automation guidance (tab/context setup,
+no JS dialogs, etc.) applies as usual; the one skill-specific rule is: after 2-3 consecutive
+tool failures on any step, stop retrying and drop to the fallback chain below (see there for
+the full trigger list).
 
 | Capability | `claude-in-chrome` tool |
 |---|---|
@@ -31,15 +31,11 @@ fallback chain below.
 | Read a page's structure/text | `read_page`; `get_page_text` for a single card only |
 | Detect a bot challenge / dead end | `read_page` or `get_page_text` on the loaded page |
 
-**Substitutable driver.** A Playwright-MCP-backed driver could replace `claude-in-chrome` for
-the same capability list, and would specifically enable *unattended* `/watch` re-checks (the
-`claude-in-chrome` extension needs an attended user session and site permission, so it cannot
-drive scheduled/background price re-checks). Such a driver would need to provide: opening a
-URL in an isolated browser context, filling the same three form steps (destination
-autocomplete, date range, guests/rooms), waiting for results to render, and returning either
-the rendered DOM/text or an equivalent structured accessibility read for the same card fields
-listed below. This skill does not define that second procedure — only the capability contract
-a substitute driver must satisfy.
+**Substitutable driver.** A Playwright-MCP-backed driver could satisfy the same capability
+table above and would additionally enable *unattended* `/watch` re-checks, which
+`claude-in-chrome` cannot do (it needs an attended user session and site permission). That
+procedure is out of scope here — this is a note recording a deliberate design decision, not a
+spec for it.
 
 ## Locating a results page
 
@@ -49,7 +45,9 @@ trivago's `locationId` (see URL grammar below) cannot be derived from a city nam
 comes from the site's own autocomplete. Always drive the form unless a known `locationId` is
 already in hand (see "Fast path" below).
 
-1. `tabs_context_mcp`, then `tabs_create_mcp` a **new** tab, `navigate` to `https://www.trivago.dk`.
+1. Check the extension connection and site permission once per run (not per destination — see
+   "Fallback chain" below), then `tabs_context_mcp`, `tabs_create_mcp` a **new** tab, `navigate`
+   to `https://www.trivago.dk`.
 2. Handle load-time overlays first: decline any non-essential-cookies banner if shown (a
    consented profile may show none), and dismiss any "Create account" promo overlay.
 3. **Privacy hazard — read before typing anything.** The homepage shows the user's own
@@ -64,7 +62,11 @@ already in hand (see "Fast path" below).
    must click a suggestion; typing and submitting without clicking is not a valid search.**
    Ambiguous names return multiple options (a verified example: "Lisbon" returned Lisbon
    Portugal, a Lisbon coast region, and three unrelated US towns named Lisbon). If the intended
-   match isn't unambiguous from the traveler's request, ask the user rather than guessing.
+   match isn't unambiguous from the traveler's request, ask the user rather than guessing. Once
+   resolved, record the destination's `locationId` (see URL grammar below) for the remainder of
+   this run, so any additional destinations already resolved this run can use the fast path
+   below instead of repeating disambiguation. This is in-conversation only — still no writing to
+   `profile/`.
 5. Selecting the destination auto-opens the date picker (two months shown side by side, `<`/`>`
    to page). Click the check-in day, then the check-out day.
 6. That auto-opens the Guests and rooms panel: Adults / Children / Rooms steppers and a "Pet
@@ -76,41 +78,42 @@ already in hand (see "Fast path" below).
 ### Fast path: construct the URL directly (only with a known locationId)
 
 Skip the form only when the numeric `locationId` for the destination is already known — either
-from earlier in this conversation, or already recorded by the traveler in
-`profile/search-queries.md` (gitignored — it may not exist in a fresh clone; read it, never write
-it). `/scrape` never writes `profile/` — only `/setup` does (per `ARCHI.md` §10). Never fabricate
-a `locationId` — a wrong one silently returns the wrong city. If the ID is not known, use the
-form path; if the user wants the discovered ID persisted, tell them to add it via `/setup`.
+from earlier in this conversation (see "capture" note above), or already recorded by the
+traveler in `profile/search-queries.md` (gitignored — it may not exist in a fresh clone; read
+it, never write it). Never fabricate a `locationId` — a wrong one silently returns the wrong
+city. If the ID is not known, use the form path; if the user wants the discovered ID
+persisted, tell them to add it via `/setup`.
 
-**Verified URL shape** (captured live against trivago.dk on 2026-07-25, for Lisbon):
+This URL shape was captured live against trivago.dk on 2026-07-25, for Lisbon:
 
 ```
 https://www.trivago.dk/en-US/lm/hotels-lisbon-portugal?search=200-31720;dr-20260914-20260919;drs-40;rc-1-2
 ```
 
-| Segment/token | Meaning | Status |
-|---|---|---|
-| `/en-US/` | Locale segment (English UI, `.dk` domain, DKK currency) | Verified |
-| a Danish locale segment | Presumed to exist alongside `/en-US/` | **Unverified — do not assume its shape** |
-| `/lm/hotels-<city>-<country>` | Destination slug | Verified for Lisbon, Portugal |
-| `search=` | Semicolon-delimited token list | Verified |
-| `200-<locationId>` | `200` = city concept type, `<locationId>` = opaque numeric ID (`31720` for Lisbon) | Verified for this one ID; never derive an ID from a name |
-| `dr-YYYYMMDD-YYYYMMDD` | Check-in/check-out | Verified (2026-09-14 to 2026-09-19) |
-| `rc-<rooms>-<adults>` | Rooms and adults, e.g. `rc-1-2` = 1 room, 2 adults | Verified |
-| `drs-40` | Unknown meaning | **Unverified — preserve as observed, do not invent a meaning** |
+| Segment/token | Meaning |
+|---|---|
+| `/en-US/` | Locale segment (English UI, `.dk` domain, DKK currency) |
+| a Danish locale segment | Presumed to exist alongside `/en-US/`. **Unverified — do not assume its shape.** |
+| `/lm/hotels-<city>-<country>` | Destination slug, verified for Lisbon, Portugal |
+| `search=` | Semicolon-delimited token list |
+| `200-<locationId>` | `200` = city concept type, `<locationId>` = opaque numeric ID (`31720` for Lisbon); verified for this one ID only — never derive an ID from a name |
+| `dr-YYYYMMDD-YYYYMMDD` | Check-in/check-out (verified 2026-09-14 to 2026-09-19) |
+| `rc-<rooms>-<adults>` | Rooms and adults, e.g. `rc-1-2` = 1 room, 2 adults |
+| `drs-40` | **Unverified — meaning unknown; preserve as observed, do not invent a meaning.** |
 
 This URL shape can rot (see "Limits and etiquette"). If a constructed URL misbehaves — wrong
 city, no results, obviously stale layout — fall back to the form path rather than debugging the
-URL further.
+URL further; drive the form in the already-open tab rather than starting over from a new tab.
 
 ## Reading result cards
 
 - **Use `find` to enumerate result cards** (query for hotel result cards/articles). Verified:
-  it returned all 40 loaded cards as `<article>` refs with name, star rating, and price.
+  it returned all 40 loaded cards as `<article>` refs with name, star rating, and price. Fall
+  back to `read_page` (accessibility tree) only if `find` returns nothing — don't run both by
+  default, that costs a redundant full-page read per destination. Prefer refs over pixel
+  coordinates generally.
 - **Do not use `get_page_text` to enumerate results** — verified it returns only a single card
   (it targets `<article>` and prioritizes one), so it will silently under-report a list.
-- `read_page` (accessibility tree) is a viable alternative extraction path. Prefer text/a11y
-  extraction over coordinate clicking generally, and prefer refs over pixel coordinates.
 - Ignore non-hotel promotional cards interleaved with results (observed example: "Haven't found
   a good match yet?").
 - Ignore "Sign in to unlock" member-only prices entirely — this skill never logs in, so never
@@ -168,8 +171,9 @@ None of these steps may error out a `/scrape` run — always degrade to the next
 
 Any of these conditions ends the browser attempt and drops straight to the web-search fallback:
 
-1. Extension not connected, or `tabs_context_mcp` shows no usable tab.
-2. Site permission for trivago.dk denied in the extension.
+1. Extension not connected, or `tabs_context_mcp` shows no usable tab. Checked once per run,
+   not per destination.
+2. Site permission for trivago.dk denied in the extension. Also checked once per run.
 3. Bot challenge detected on the loaded page — stop navigating that page immediately.
 4. Page unreadable (both `find` and `read_page` fail, or 2-3 consecutive tool failures).
 5. Zero results for the given params.
@@ -180,8 +184,10 @@ Then, in order:
    same result record with `source: "trivago-search"` (or a clearly labeled web-search variant
    if the orchestrating skill distinguishes provenance).
 7. **Final fallback: ask the user to paste listing text** (a specific hotel page, email, or
-   screenshot-derived text), per `CLAUDE.md`'s paste-anything fallback — this enters the same
-   normalize → dedupe → score pipeline as any other candidate.
+   screenshot-derived text), per `CLAUDE.md`'s paste-anything fallback and
+   `.claude/skills/trip-scraper/SKILL.md`'s "Paste-a-listing fallback" section — this enters the
+   same normalize → dedupe → score pipeline as any other candidate, but takes `"source":
+   "pasted"`, **not** `"trivago-search"` (per that section; `source` feeds the dedupe key hash).
 
 ## Estimate labeling
 
@@ -194,10 +200,6 @@ taxes, resort fees, and city taxes that the underlying booking site adds later.
 - Read-only navigation of ordinary trivago.dk search-result pages, in the user's own browser
   session, at normal human-paced request volume. No aggressive polling, no scripted request
   volume, no booking, payment, or account-login automation.
-- The DOM structure and the `search=` URL param grammar above are expected to drift over time
-  since they were captured from one live session — prefer the form-driven path whenever the
-  constructed URL misbehaves rather than trying to patch the URL grammar.
-- Every concrete example in this file (the Lisbon URL and `locationId`, the two price-trap
-  figures, the card badges) was captured from a single browser session on 2026-07-25. They
-  illustrate structure only — they are not current pricing or availability, and must never be
-  presented as live data in an actual `/scrape` run.
+- The DOM structure and the `search=` URL param grammar above are expected to drift over time,
+  since they were captured from a single live session (see point-of-use guidance above for what
+  to do when they do).
