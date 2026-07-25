@@ -1,7 +1,7 @@
 # AI Holiday Search — Architecture Documentation
 
-> Generated: 2026-07-25 · Commit: dca0f54 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
-> Last architecture change: `dca0f54` — `momondo-search` added as a second browser-driven source, the first covering multiple verticals; §8 carve-out generalized past its single original instance
+> Generated: 2026-07-25 · Commit: a126743 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
+> Last architecture change: `a126743` — `booking-search` added as a third browser-driven source (stays + flights; no packages vertical)
 > Re-read this file at the start of any session touching this codebase. Update it when the architecture changes (new major dependency, restructured layer, changed convention).
 
 ---
@@ -75,7 +75,8 @@ ai-holiday-search/
 │   │   ├── trip-scraper/           # SKILL.md (adapter protocol + state schemas) + search-queries.md
 │   │   ├── price-watch/            # SKILL.md: slug derivation, watchlist schema, re-check thresholds
 │   │   ├── trivago-search/         # SKILL.md: browser-driven stays source, no search.py, own fallback chain
-│   │   └── momondo-search/         # SKILL.md: browser-driven flights/stays/packages source, no search.py, own fallback chain
+│   │   ├── momondo-search/         # SKILL.md: browser-driven flights/stays/packages source, no search.py, own fallback chain
+│   │   └── booking-search/         # SKILL.md: browser-driven stays/flights source, no search.py, own fallback chain
 │   └── settings.local.json         # Per-user permissions; untracked — see BACKLOG item 4
 │
 ├── .agents/skills/                 # Agent-AGNOSTIC search adapters — designed to be copied out wholesale
@@ -259,6 +260,7 @@ User types /scrape
            → .agents/skills/*/search.py       (the network call, or exit 2 → web-search fallback)
            → .claude/skills/trivago-search/   (browser read, or own fallback chain → web search)
            → .claude/skills/momondo-search/   (browser read across flights/stays/packages, or own fallback chain → web search)
+           → .claude/skills/booking-search/   (browser read across stays/flights, or own fallback chain → web search)
        → .claude/skills/holiday-planner/03-trip-evaluation.md  (scoring + ranking)
        → profile/*.md                     (the traveler's real data; must exist)
 ```
@@ -277,7 +279,7 @@ Commands are procedure; skills are reference. A command file states its inputs, 
 | Command | Reads | Writes | Shape |
 |---|---|---|---|
 | `/setup` | `documents/`, `$ARGUMENTS`, holiday-planner templates | `profile/01…06-*.md`, `trip_tracker.csv` | 3 modes (documents / pasted text / interview), auto-detected; asks rather than picking silently; documents-mode is idempotent and merges |
-| `/scrape` | `profile/`, `search-queries.md`, adapters, `trivago-search/SKILL.md`, `momondo-search/SKILL.md`, `trip_scraper/seen.json` | `trip_scraper/seen.json` | Fan out (including browser-driven `trivago-search` and `momondo-search` runs via `claude-in-chrome` MCP tools, in its `allowed-tools`; `momondo-search` covers whichever of flights/stays/packages the run calls for) → normalize → dedupe → score → present sorted by fit with per-criterion reasoning |
+| `/scrape` | `profile/`, `search-queries.md`, adapters, `trivago-search/SKILL.md`, `momondo-search/SKILL.md`, `booking-search/SKILL.md`, `trip_scraper/seen.json` | `trip_scraper/seen.json` | Fan out (including browser-driven `trivago-search`, `momondo-search`, and `booking-search` runs via `claude-in-chrome` MCP tools, in its `allowed-tools`; `momondo-search` and `booking-search` each cover whichever of their verticals the run calls for) → normalize → dedupe → score → present sorted by fit with per-criterion reasoning |
 | `/plan` | `profile/`, holiday-planner 03/04/05 | `itineraries/<trip-slug>/itinerary.md` | 7 explicit steps, see below |
 | `/watch` | `watchlist/*.json`, adapters | `watchlist/<slug>.json` | `add` / `remove` / no-args re-check |
 | `/reset` | — | deletes `profile/`, `watchlist/`, `trip_tracker.csv` | Requires typing `RESET`; touches only gitignored state |
