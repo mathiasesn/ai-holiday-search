@@ -259,8 +259,11 @@ booking-specific mappings are given here:
 - `price`: always the **all-in total for the whole party/stay** — the stay-total headline for
   stays (already tax/fee-inclusive per the label observed), the Total line from the `(i)` popover
   for flights (never the per-person headline).
-- `price_per_person`: present for flights, with the divisor (adult count used in the search)
-  stated explicitly.
+- `price_per_person`: present for **both** verticals — `price` above divided by the adult count
+  used in the search (`group_adults` for stays, `adults` for flights). State this divisor plainly
+  wherever `price_per_person` is shown; never leave the divisor implied. For flights, note that
+  this reconstructs the per-person headline the page already displays, so the two should agree —
+  if they don't, the party total was misread and must be re-checked.
 - `currency`: `"DKK"` — what the page reads. Per
   `.claude/skills/holiday-planner/05-budget-rules.md` (EUR primary, DKK noted), also present a
   EUR-converted figure and label it a **conversion estimate** (rate not pinned to a live source),
