@@ -19,6 +19,7 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 - `.agents/skills/{flights-search,stays-search,packages-search}/search.py` — search adapters.
 - `.claude/skills/trivago-search/SKILL.md` — browser-driven trivago.dk stays source.
 - `.claude/skills/momondo-search/SKILL.md` — browser-driven momondo.dk source covering flights, stays, and packages.
+- `.claude/skills/booking-search/SKILL.md` — browser-driven booking.com source covering stays and flights only (no packages).
 - `trip_scraper/seen.json` — previously seen candidates, for deduplication.
 
 ## State touched
@@ -29,6 +30,9 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
   whose resolved query has a stay component (not on flights-only or packages-only runs).
 - Also opens a browser tab (via `claude-in-chrome`) for the `momondo-search` step, covering
   whichever of flights/stays/packages the resolved query calls for — see step 4 below.
+- Also opens a browser tab (via `claude-in-chrome`) for the `booking-search` step, covering
+  whichever of stays/flights the resolved query calls for (no packages vertical) — stays and
+  flights share one browser session and one permission check with each other, per step 4 below.
 
 ## Steps
 
@@ -57,6 +61,15 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
    authoritatively in that skill's `SKILL.md` (do not re-enumerate the triggers here). Which of
    its verticals run is governed by the "Vertical selection" rule in
    `.claude/skills/trip-scraper/SKILL.md`. The run must complete even when Chrome is unavailable.
+
+   Also run `booking-search` as a first-class source across whichever of stays/flights the
+   resolved query calls for, following `.claude/skills/booking-search/SKILL.md`. Like
+   `momondo-search`, it has no CLI and no exit code and follows its own fallback chain, defined
+   authoritatively in that skill's `SKILL.md` (do not re-enumerate the triggers here). It has
+   **no packages vertical** — booking.com has no bundled flight+hotel package product. Its stays
+   and flights verticals share one browser session and one permission check with each other, and
+   are selected by the same "Vertical selection" rule. The run must complete even when Chrome
+   is unavailable.
 
 5. **Deduplicate.** Read `trip_scraper/seen.json` (if absent, treat it as `{"schema_version": 1, "entries": {}}` — when writing it for the first time, include `schema_version`). Derive each candidate's dedupe key exactly as specified in `.claude/skills/trip-scraper/SKILL.md` — that file is the authority on the key derivation and the file format; do not invent an ad hoc match. For each candidate:
    - If its key is **not** present in `entries`, it's genuinely new — keep it for scoring and presentation.

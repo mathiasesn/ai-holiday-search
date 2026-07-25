@@ -264,11 +264,12 @@ mappings are given here:
     component split available.
 - `url`: the card's own deep link if present, else the results page URL.
 
-**Overlap with `trivago-search` on stays:** when momondo and trivago surface the same property,
-present **both rows separately** with their own price and `source`, visibly linked/marked as the
-same underlying property, with the price gap noted as further evidence both are estimates. Score
-and rank the property **once**, using the lower of the two prices — see
-`.claude/skills/trip-scraper/SKILL.md` for the shared candidate record this relies on.
+**Overlap with `trivago-search`/`booking-search` on stays, or `booking-search` on flights:** when
+the same property or flight is surfaced by more than one source, present **one row per source**,
+each with its own price and `source`, visibly linked/marked as the same underlying item, with the
+price gap noted as further evidence all figures are estimates. Score and rank the item **once**,
+using the lowest of the quoted prices — see `.claude/skills/trip-scraper/SKILL.md` for the shared
+candidate record this relies on.
 
 ## Fallback chain
 
