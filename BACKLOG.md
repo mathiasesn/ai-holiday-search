@@ -132,11 +132,18 @@ tested. Cheap either way; worth doing alongside item 1's fixture tests.
 
 ### 10. `/watch` has no path for browser-driven sources
 
-`trivago-search` produces candidates with `source: "trivago-search"`, but
-`/watch` and `.claude/skills/price-watch/SKILL.md` know only two kinds of trip:
-one re-searchable through a `.agents/skills/*` adapter, and one that was pasted.
-A trivago candidate matches neither, so `/watch add` on a `/scrape` result can
-save a trip that no re-check branch knows how to price again.
+`trivago-search` and `momondo-search` produce candidates with their own `source`
+values, but `/watch` and `.claude/skills/price-watch/SKILL.md` know only two
+kinds of trip: one re-searchable through a `.agents/skills/*` adapter, and one
+that was pasted. A browser-driven candidate matches neither, so `/watch add` on
+a `/scrape` result can save a trip that no re-check branch knows how to price
+again.
+
+`momondo-search` widened this gap. It was a stays-only problem while
+`trivago-search` was the sole browser-driven source — a user could at least
+re-check flights and packages through the adapters. momondo covers all three
+verticals, so the untrackable set now includes flight and package candidates
+too, which are exactly the ones whose prices move most.
 
 There is a second, harder half. `price-watch` is built for unattended re-checks
 and the README says `/watch` can be scheduled via cron or CI — but the
@@ -156,28 +163,45 @@ Needs a decision, not just an edit. Options:
 - Refuse `/watch add` for browser-driven candidates and say why.
 
 Whichever is chosen, `price-watch/SKILL.md`, `.claude/commands/watch.md`, and the
-README's "schedule it" claim must end up agreeing.
+README's "schedule it" claim must end up agreeing. The substitutable-driver note
+now lives in `.claude/skills/trivago-search/SKILL.md` and is referenced by
+`momondo-search` — one driver decision would cover both sources.
 
 ### 11. Nothing verifies a browser-driven source
 
-CI cannot exercise `trivago-search`: there is no browser in the runner, and the
-procedure depends on a live third-party site. `tools/lint_skills.py` checks its
-frontmatter and links, which proves the file is well-formed and proves nothing
-about whether the procedure still works.
+CI cannot exercise `trivago-search` or `momondo-search`: there is no browser in
+the runner, and both procedures depend on live third-party sites.
+`tools/lint_skills.py` checks frontmatter and links, which proves the files are
+well-formed and proves nothing about whether the procedures still work.
 
-The specific decay risks, all recorded in the skill itself:
+The specific decay risks, all recorded in the skills themselves:
 
-- The `search=` URL grammar was captured from one live session. `drs-40` has an
-  unknown meaning and the Danish locale segment was never confirmed.
-- The `locationId` values are opaque and site-assigned; a stale one silently
-  returns the wrong city rather than failing.
-- Card layout drives the per-night-vs-total price distinction, which is the one
-  place a silent DOM change produces wrong numbers instead of no numbers.
+- **trivago:** the `search=` URL grammar was captured from one live session;
+  `drs-40` has an unknown meaning and the Danish locale segment was never
+  confirmed. `locationId` values are opaque and site-assigned, so a stale one
+  silently returns the wrong city rather than failing. Card layout drives the
+  per-night-vs-total price distinction.
+- **momondo:** three verticals means roughly triple the surface. The flights URL
+  grammar is derivable, but stays has none (the form is the only path, and its
+  `-p<id>` place ID and `ucs=` token are opaque), and two segments of the
+  packages URL are marked unverified. Each vertical has its own price trap, and
+  flights and packages are *inverted* — the headline is per-person on one and
+  the total on the other, so a DOM change that swaps them produces plausible
+  wrong numbers. The stays price basis depends on a `Pris:` dropdown that
+  defaults to per-night.
 
-This is not fixable by a normal test, and mocking the site would only assert
-that the mock matches the doc. The realistic options are a manual re-verification
-checklist run when trivago results look wrong, or an opt-in live smoke check that
-is never part of required CI. Related to item 1: exit 0 is not evidence.
+Every one of these is a silent-wrong-number risk, not a crash: the failure mode
+is a shortlist that looks fine and is priced wrong.
+
+This is not fixable by a normal test, and mocking the sites would only assert
+that the mock matches the doc. The realistic options are a manual
+re-verification checklist run when results look wrong, or an opt-in live smoke
+check that is never part of required CI. Related to item 1: exit 0 is not
+evidence.
+
+Both skills record the date their facts were captured (both 2026-07-25) — that
+date is the closest thing to a freshness signal this repo has, and a
+re-verification pass should update it.
 
 ## Features
 

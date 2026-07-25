@@ -13,9 +13,15 @@ This guide covers getting a fresh fork of **ai-holiday-search** running end to e
 - (Optional) `AMADEUS_API_KEY` and `AMADEUS_API_SECRET` — free-tier Amadeus Self-Service
   API credentials, used by `flights-search`. Without them, flight search falls back to
   Claude's web search.
+- (Optional) The [Claude Chrome extension](https://claude.ai/chrome) — enables the two
+  browser-driven sources, `trivago-search` (stays) and `momondo-search` (flights, stays,
+  and packages). These drive your own signed-in Chrome session because neither site has a
+  usable API. They need no credentials and never log in, book, or pay. You will be asked
+  to grant per-site permission the first time. Without the extension, `/scrape` falls back
+  to web search.
 
 Nothing else is required. Everything degrades gracefully to web search + paste-a-listing
-if you skip the optional API keys.
+if you skip the optional API keys and the extension.
 
 ## 1. Fork and clone
 
@@ -119,6 +125,16 @@ operator or booking site):
 4. Reference the new source from `/scrape`'s configured sources or `search-queries.md` as
    needed.
 
+### Browser-driven sources
+
+If a site has no usable API and blocks non-browser clients, the alternative is a
+Markdown-only skill under `.claude/skills/` with no `search.py` and no exit code —
+`trivago-search` and `momondo-search` are the two worked examples. Such a skill defines its
+own fallback chain instead of the adapter exit-code protocol, and normalizes into the same
+result record. Verify any URL grammar against the live site rather than guessing it, record
+the date you captured it, and mark anything you couldn't confirm as unverified. `ARCHI.md`
+§8 documents both paths in full.
+
 PRs adding country- or region-specific package/charter skills are welcome.
 
 ## 7. Scheduling `/watch`
@@ -137,6 +153,11 @@ it manually, or schedule it:
 - **Claude Code recurring task** — if your Claude Code setup supports scheduled/looping
   invocations, point it at `/watch` on your preferred interval.
 
+Scheduling only covers trips found through the API adapters. Trips that came from
+`trivago-search` or `momondo-search` cannot be re-checked unattended, because those sources
+need an attended browser session with site permission — an unresolved gap tracked as
+[BACKLOG.md](BACKLOG.md) item 10.
+
 ## Troubleshooting
 
 **`/scrape` or `/plan` says to run `/setup` first.**
@@ -151,6 +172,12 @@ messages rather than expecting key values in output.
 Confirm you haven't renamed a gitignored folder or added files outside the patterns in
 `.gitignore`. Run `git check-ignore -v <path>` to debug why a given file is or isn't
 ignored.
+
+**`/scrape` never seems to use trivago or momondo.**
+The Chrome extension isn't installed or connected, or you haven't granted permission for
+that site. Both sources degrade silently to web search by design, so the run still
+completes — `/scrape` reports which sources used a live read versus a fallback, so check
+there to confirm.
 
 **A search source CLI exits non-zero.**
 Run it directly with `--help` and check its documented failure modes in its `SKILL.md` —

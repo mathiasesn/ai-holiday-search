@@ -1,7 +1,7 @@
 # AI Holiday Search — Architecture Documentation
 
-> Generated: 2026-07-25 · Commit: 30f2b77 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
-> Last architecture change: `d9c1895` — browser-driven sources (§8 carve-out, §10, §11)
+> Generated: 2026-07-25 · Commit: dca0f54 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
+> Last architecture change: `dca0f54` — `momondo-search` added as a second browser-driven source, the first covering multiple verticals; §8 carve-out generalized past its single original instance
 > Re-read this file at the start of any session touching this codebase. Update it when the architecture changes (new major dependency, restructured layer, changed convention).
 
 ---
@@ -24,7 +24,7 @@ Known gaps, deferred decisions, and engineering debt are tracked in `BACKLOG.md`
 
 Two layers make up the system, and the balance between them is the single most important thing to understand:
 
-1. **The prompt/agent layer is the product.** Most of the repo's substance is Markdown that Claude Code reads as instructions: 5 slash commands, 4 Claude skills, and 6 numbered holiday-planner reference documents. Workflow logic — fit scoring math, pacing enforcement, the drafter–reviewer pipeline, budget rules, JSON state-file schemas — lives in prose and tables in these files, not in Python.
+1. **The prompt/agent layer is the product.** Most of the repo's substance is Markdown that Claude Code reads as instructions: 5 slash commands, 5 Claude skills, and 6 numbered holiday-planner reference documents. Workflow logic — fit scoring math, pacing enforcement, the drafter–reviewer pipeline, budget rules, JSON state-file schemas — lives in prose and tables in these files, not in Python.
 2. **The Python layer is thin support.** ~1,100 lines total, split between three near-standalone search adapters (`.agents/skills/*/search.py`) that wrap external APIs, and two repo-hygiene scripts (`tools/lint_skills.py`, `tools/security_guards.py`) that CI runs on every push.
 
 Architecturally, the flow is: `/setup` fills `profile/` from tracked templates → `/scrape` fans out to adapters (or falls back to web search), normalizes and deduplicates results, and scores them → `/plan` runs a 7-step drafter–reviewer pipeline producing a verified Markdown itinerary → `/watch` snapshots trips and re-checks prices over time.
@@ -219,7 +219,7 @@ This is **distinct from** the "normalized candidate record" that `trip-scraper` 
 
 **CLI adapter:** copy an existing adapter folder, rename it, update `SKILL.md` frontmatter `name` to match the new directory, point `search.py` at your API, keep the exit-code protocol and result-record shape exactly, add any new credential env vars to `ADAPTER_CRED_VARS` in the CI workflow and to `ALLOWED_ENV_VAR_NAMES` in `tools/security_guards.py`, and `chmod +x search.py`. Do not introduce a shared import.
 
-**Browser-driven source:** add a Markdown-only skill under `.claude/skills/` — no `search.py`, no exit code. Define its own fallback chain, normalize results into the same result record as CLI adapters, and register it in both `search-queries.md`'s source table and `trip-scraper`'s fan-out step.
+**Browser-driven source:** add a Markdown-only skill under `.claude/skills/` — no `search.py`, no exit code. Define its own fallback chain, normalize results into the same result record as CLI adapters, and register it in both `search-queries.md`'s source table and `trip-scraper`'s fan-out step. If it covers more than one vertical, register it in each vertical's fan-out list and follow the "Vertical selection" rule rather than restating it. Verify any URL grammar against the live site, record the date, and mark unverified tokens as such — `BACKLOG.md` item 11 explains why this date is the only freshness signal available.
 
 ---
 
