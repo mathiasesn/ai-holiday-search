@@ -221,7 +221,7 @@ def check_adapter_contract(errors):
         env = {k: v for k, v in os.environ.items() if k not in env_vars_to_unset}
         try:
             result = subprocess.run(
-                ["python3", search_py, "--json"],
+                [sys.executable, search_py, "--json"],
                 capture_output=True,
                 text=True,
                 env=env,

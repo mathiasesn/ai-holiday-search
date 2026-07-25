@@ -1,0 +1,8 @@
+[project]
+name = "ai-holiday-search"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["requests"]
+
+[tool.uv]
+package = false
