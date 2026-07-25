@@ -74,7 +74,9 @@ script resolves an isolated environment from that inline block — it does not
 consult `pyproject.toml` or `uv.lock` — so `requests` still resolves unpinned
 on each adapter run. `uv lock --script <file>` would produce a per-script
 lockfile for this but has not been adopted. Also still open: enable Dependabot
-(or an equivalent) to propose upgrades against `uv.lock`.
+(or an equivalent) to propose upgrades against `uv.lock` — note it would cover
+only the lockfile, not the adapters' inline headers. See also item 8: nothing
+currently verifies those headers at all.
 
 ### 7. Shared adapter code (`.agents/skills/_common.py`)
 
@@ -88,6 +90,45 @@ the documented copy-a-folder fork workflow would break. The duplication is
 currently guarded by a CI check that executes each adapter with credentials
 unset and fails on any drift in the contract. Reopen only if the fork workflow
 changes — and if you do, the CI drift check is the thing to preserve.
+
+The drift check lives in `check_adapter_contract()` in `tools/lint_skills.py`.
+Note what it does *not* cover — see item 8.
+
+### 8. Nothing exercises the adapters' PEP 723 dependency block
+
+Each adapter declares `dependencies = ["requests"]` in its inline script
+metadata, and that header is what makes the copy-a-folder fork workflow work.
+No check currently proves the header is correct:
+
+- `requests` is imported lazily *inside* `main()`, after the no-credentials
+  early return. So neither `--help` (the `adapter-smoke` and
+  `standalone-adapter` jobs) nor `--json` (the contract check in item 7) ever
+  reaches the import.
+- An adapter whose header listed no dependencies, or misspelled `requests`,
+  would pass every check green and fail only for a forker at first real search.
+- `uv sync --script <file>` is not a fix — it exits 0 on an emptied
+  `dependencies` list (verified).
+
+This is also the reason the duplication in item 6 — `requests` declared in both
+`pyproject.toml` and three headers — is currently *undetectable* rather than
+merely un-automated.
+
+Options, cheapest first: run one adapter past the credential gate with dummy
+credentials and assert stderr does not contain the "requests package is
+required" message (costs a network call, so mildly flaky); or add a lint rule
+comparing each header's dependency list against `pyproject.toml`. The lint rule
+was offered during planning and declined as over-engineering — reopen it only if
+a second dependency ever appears, at which point the drift risk stops being
+theoretical.
+
+### 9. `tools/` is never executed on the declared 3.10 floor
+
+`pyproject.toml` sets `requires-python = ">=3.10"` and `adapter-smoke` matrixes
+3.10 and 3.12, but `lint-and-guards` runs only on the `.python-version` pin
+(3.12). A 3.10-incompatible construct in `tools/lint_skills.py` or
+`tools/security_guards.py` ships green and breaks only for a forker on 3.10.
+Fix: matrix the `lint-and-guards` job too, or drop the floor to what is actually
+tested. Cheap either way; worth doing alongside item 1's fixture tests.
 
 ## Features
 
