@@ -157,7 +157,9 @@ No tests exist. `BACKLOG.md` item 1 explains why that is the highest-priority ga
 
 Adapter configuration is environment variables; there is no adapter-specific config file. Every variable is **optional** — unset means the adapter takes its documented fallback path. The one exception is MCP server configuration: tracked `.mcp.json` at the repo root declares two Playwright MCP servers — see §3.
 
-**`playwright`** (`npx -y @playwright/mcp@0.0.78 --headless --isolated`) is the one the `/watch` browser path (and the `/scrape` Playwright opt-in) depend on. `--headless`: a scheduled/cron run has no display, so a headed browser cannot start there. `--isolated`: a fresh profile per run, no persisted cookies or login state — this is what neutralizes the browser-driven skills' prefilled-previous-search privacy hazard (trivago/momondo/booking all arrive prefilled from account history when a real, logged-in session is used instead). Trade-off: consent/cookie walls appear on every run, which is why the browser-driven skills define an unattended terminal outcome.
+**`playwright`** (`npx -y @playwright/mcp@0.0.78 --headless --isolated --user-agent "…Chrome/149.0.0.0…"`) is the one the `/watch` browser path (and the `/scrape` Playwright opt-in) depend on. `--headless`: a scheduled/cron run has no display, so a headed browser cannot start there. `--isolated`: a fresh profile per run, no persisted cookies or login state — this is what neutralizes the browser-driven skills' prefilled-previous-search privacy hazard (trivago/momondo/booking all arrive prefilled from account history when a real, logged-in session is used instead). Trade-off: consent/cookie walls appear on every run, which is why the browser-driven skills define an unattended terminal outcome. `--user-agent`: headless Chrome otherwise advertises `HeadlessChrome`, which trivago's edge 403s at the document level — the evidence and scope live once in `.claude/skills/trivago-search/SKILL.md` ("Why `--headless --isolated`").
+
+Playwright MCP writes console logs and page snapshots of real searches — including the runner's public IP — to `.playwright-mcp/`. That directory is gitignored as personal data (§9).
 
 **`playwright-headed`** (`npx -y @playwright/mcp@0.0.78 --isolated`, no `--headless`) is a second, tracked server for attended debugging with a visible browser window — registered out of the box so `/scrape`'s Playwright opt-in can be run headed without any manual `claude mcp add`. It keeps `--isolated` for the same privacy reason as above. Point the driver at it for a debugging session, then go back to `playwright` for normal use.
 
@@ -236,7 +238,7 @@ The repo is split into **tracked framework content** and **untracked personal da
 
 **Tracked (safe to commit):** `CLAUDE.md`, `ARCHI.md`, `README.md`, `SETUP.md`, `BACKLOG.md`, everything under `.claude/commands/`, `.claude/skills/`, `.agents/skills/`, `tools/`, `.github/`, `pyproject.toml`, `uv.lock`, `.mcp.json`, `trip_tracker.csv.example`, and the `.gitkeep` / `documents/README.md` scaffolding placeholders.
 
-**Gitignored (never commit):** `profile/`, `itineraries/*`, `watchlist/*`, `trip_scraper/*`, `trip_tracker.csv`, the contents of `documents/past-trips/` and `documents/preferences/`, `.env`, `*.key`, and `specs/` (via its own `.gitignore` containing `*`).
+**Gitignored (never commit):** `profile/`, `itineraries/*`, `watchlist/*`, `trip_scraper/*`, `trip_tracker.csv`, the contents of `documents/past-trips/` and `documents/preferences/`, `.env`, `*.key`, `.playwright-mcp/` (Playwright MCP's console logs and page snapshots of real searches, which include the runner's public IP), and `specs/` (via its own `.gitignore` containing `*`).
 
 **`profile/tooling.md`** — the browser-driver preference, written by `/setup`, read by `/scrape` (and `/watch`). Shape:
 

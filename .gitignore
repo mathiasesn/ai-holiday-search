@@ -25,6 +25,10 @@ documents/preferences/*
 .env
 *.key
 
+# Playwright MCP session output: console logs and page snapshots of real
+# searches, including the runner's public IP. Personal data, never tracked.
+.playwright-mcp/
+
 # Python
 __pycache__/
 .venv/

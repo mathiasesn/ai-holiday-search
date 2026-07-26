@@ -101,7 +101,9 @@ This runs the full workflow: evaluate fit, draft a day-by-day itinerary with bud
 
 `/watch` stores a snapshot of each saved trip in `watchlist/` and, on each run, re-searches the same route/dates and reports drops, rises, and sold-out warnings. Run it manually or schedule it (cron, CI, or Claude Code on a recurring task).
 
-Trips from the browser-driven trivago, momondo, and booking sources are re-checkable unattended too: `/watch` drives them through the Playwright MCP server declared in this repo's tracked `.mcp.json`, which runs headless and needs no attended session. This is documented but not yet proven in practice: neither the unattended *scheduled* mode (cron, CI, or a recurring Claude Code task) nor a manual, on-demand run has been exercised against the real sites yet.
+Trips from the browser-driven trivago, momondo, and booking sources are re-checkable unattended too: `/watch` drives them through the Playwright MCP server declared in this repo's tracked `.mcp.json`, which runs headless and needs no attended session.
+
+A first on-demand run against the real sites (2026-07-26) confirmed the dispatch end to end — a saved trivago trip reached the browser branch and was driven through Playwright without an attended session. That run was then blocked by trivago's bot protection, which rejected headless Chrome's default User-Agent; `.mcp.json` now overrides the UA, a fix verified at the HTTP layer but not yet re-run through a full `/watch`. Expect blocked reads to happen anyway: they are reported distinctly from sold-out and never overwrite the last known good price. The *scheduled* mode (cron, CI, or a recurring Claude Code task) has still not been exercised. See `BACKLOG.md` item 10.
 
 ## File structure
 

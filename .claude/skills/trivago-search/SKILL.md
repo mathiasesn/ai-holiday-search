@@ -30,12 +30,15 @@ run on a schedule — that is the sole reason the second driver exists. The shar
 drivers: after 2-3 consecutive tool failures on any step, stop retrying and drop to the
 fallback chain below (see there for the full trigger list).
 
-The Playwright MCP server is declared in the repo's tracked `.mcp.json` as
-`npx -y @playwright/mcp@0.0.78 --headless --isolated`. The tool names below were confirmed
-present in a connected Playwright MCP session on 2026-07-26 — that confirms the tools exist and
-are callable, not that a real site was read through them; the live walkthrough against
-trivago.dk itself is still pending (see "Unattended terminal outcome" below and `BACKLOG.md`
-item 11).
+The Playwright MCP server is declared in the repo's tracked `.mcp.json` (see `ARCHI.md` §7 for
+both servers' full argument lists). The tool names below were confirmed present in a connected
+Playwright MCP session on 2026-07-26.
+
+A walkthrough on 2026-07-26 drove this skill's URL through the Playwright driver against the
+real trivago.dk and hit a `403` bot block, which is what the `--user-agent` flag below now
+fixes. That fix is verified at the HTTP layer but has not yet been re-run through a full
+`/watch`, so no step below should be treated as read-confirmed against the live page — see
+`BACKLOG.md` items 10 and 11.
 
 | Capability | `claude-in-chrome` tool | Playwright MCP tool |
 |---|---|---|
@@ -61,6 +64,13 @@ booking-search) commit to under "Limits and etiquette".
 - `--isolated`: a fresh profile per run, no persisted cookies or login state. This side-steps
   the privacy hazard in step 3 below (the homepage prefills the user's previous search and
   shows their recently-viewed properties) — an isolated context has no such history to leak.
+- `--user-agent` with an ordinary Chrome UA: **required for trivago specifically.** Headless
+  Chrome advertises `HeadlessChrome` in its User-Agent, and trivago's edge rejects that token
+  with `403 Access Denied` on the document itself, before any page script runs — so no
+  in-page workaround can recover it. Verified 2026-07-26: two requests to the same results
+  URL differing only by `HeadlessChrome/149` vs `Chrome/149` returned 403 and 200. momondo
+  (200) and booking (202) were indifferent to the token; only trivago blocks it. Because the
+  UA is set on the server in `.mcp.json`, no procedure step needs to know about this.
   Trade-off: consent/cookie walls appear on every run and bot-challenge risk rises, which is
   why the unattended terminal outcome below is defined.
 

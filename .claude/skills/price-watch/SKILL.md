@@ -101,18 +101,28 @@ branch for this run once, rather than re-discovering the unavailability on every
      than duplicating it here. On any chain-ending condition (bot challenge, consent wall, zero
      results, unreadable page), fall through to Claude web search exactly as the attended
      fallback chain does. If web search also yields nothing, the check is terminal for this
-     trip: append a `price_history` entry with `available: false` and note the reason (bot
-     challenge / consent wall / zero results / unreadable page) in the run's report text only —
-     never in the JSON. Report this distinctly from a genuine sold-out (see thresholds below); a
+     trip: append a `price_history` entry with `price: null`, `available: null`, and
+     `unverified_reason` set to exactly one of `bot_challenge`, `consent_wall`, `zero_results`,
+     `unreadable_page`. Report this distinctly from a genuine sold-out (see thresholds below); a
      blocked read is not evidence a trip is unavailable.
+
+     `available: null` means **could not verify** and is never interchangeable with
+     `available: false`, which asserts the trip is genuinely gone. Recording a blocked read as
+     `false` would make it byte-identical to a sold-out and would strand the distinction in
+     transient report text, so the reason belongs in the JSON — as this closed enum, never as
+     free prose.
    - **Pasted** (`source: "pasted"`): no live re-query is possible — ask the user to re-paste,
      or skip with a note.
    Every trip kind must land in one of the three branches above; none may fall through unhandled.
-2. Compare the new price/availability against the **most recent** `price_history` entry (not
-   just the original snapshot).
-3. Append a new `price_history` entry with `checked_at` set to now (ISO-8601, with offset). The
-   entry shape and `schema_version: 1` are unchanged regardless of trip kind or which driver
-   produced the read — entries never record the driver.
+2. Compare the new price/availability against the most recent **verified** `price_history` entry
+   — the latest one whose `available` is not `null` (not just the original snapshot). Entries with
+   `available: null` carry no observation, so they must be skipped when choosing the baseline;
+   using one would compare a live price against a non-reading and invent a change that never
+   happened.
+3. Append a new `price_history` entry with `checked_at` set to now (ISO-8601, with offset).
+   `schema_version` stays `1`: `unverified_reason` is present only on unverified entries, and
+   `available: null` is a new value for an existing field rather than a shape change. Entries
+   never record the driver, regardless of trip kind or which driver produced the read.
 4. Report per the thresholds below.
 
 ## Reporting thresholds
@@ -128,7 +138,8 @@ branch for this run once, rather than re-discovering the unavailability on every
   warning**, distinct from a price change. Keep watching (do not auto-remove) unless the user
   runs `/watch remove`.
 - **Blocked/challenged read (browser-driven only):** the terminal condition defined above in
-  "Re-check procedure" — reported as a **blocked read**, never as a sold-out warning.
+  "Re-check procedure" — `available: null` plus an `unverified_reason`. Reported as a **blocked
+  read**, never as a sold-out warning, and it never becomes the baseline for the next run.
 
 ## Removing a trip (`/watch remove`)
 

@@ -174,11 +174,39 @@ Considered and not chosen:
   snapshot.
 - Refuse `/watch add` for browser-driven candidates and say why.
 
-Still open, and deliberately not overclaimed: neither a scheduled/unattended
-run nor a manual attended walkthrough (a `/scrape` run with the Playwright
-driver selected, followed by a `/watch` re-check of a saved browser-driven
-trip) has been performed against the real sites yet. No capture date for
-either exists.
+**Walkthrough performed 2026-07-26.** `/setup` → `/scrape` (claude-in-chrome)
+→ `/watch add` → `/watch` (Playwright) ran end to end against real sites. The
+dispatch worked: a `trivago-search` candidate was saved and reached the
+browser-driven branch, which navigated to the stored `trip.url` — the gap this
+item describes is closed and evidenced.
+
+The re-check itself was blocked, and diagnosing it produced the finding worth
+keeping. trivago's edge returned `403 Access Denied` on the document at 114 ms,
+before any page JavaScript ran, so it was a WAF rejection on request
+fingerprint rather than a solvable challenge. The trigger was isolated to a
+single token: two `curl` requests to the same URL differing **only** by
+`HeadlessChrome/149` vs `Chrome/149` in the User-Agent returned 403 and 200
+respectively (200 = 95 KB of real results, no challenge markers). Headless
+Chrome advertises `HeadlessChrome` by default, which is what trivago rejects.
+
+Fixed by passing `--user-agent` with an ordinary Chrome UA to the headless
+server in `.mcp.json`. Scoped: of the three browser-driven sources, only
+trivago blocks the headless UA — momondo returned 200 and booking 202 under
+both UAs, so this was never a general "unattended browsing is blocked" problem.
+
+Still open:
+
+- The `--user-agent` fix is verified at the HTTP layer only (`curl`, both UAs,
+  all three sources). It has not been re-run through `/watch` itself, which
+  needs an MCP reload to pick up the changed `.mcp.json`.
+- The UA pins a Chrome major version in a tracked file and will drift from
+  whatever Chromium `@playwright/mcp` ships. It only has to avoid saying
+  `Headless`, so drift degrades slowly rather than breaking — but it is one
+  more pinned string, related to item 6.
+- `playwright-headed` is declared in `.mcp.json` but did not connect during the
+  walkthrough, so the attended-debugging path remains unexercised.
+- momondo and booking have still never been read through Playwright; only
+  trivago has, and only as far as the 403.
 
 ### 11. Nothing verifies a browser-driven source
 
