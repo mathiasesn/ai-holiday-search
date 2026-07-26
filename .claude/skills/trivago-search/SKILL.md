@@ -34,11 +34,9 @@ The Playwright MCP server is declared in the repo's tracked `.mcp.json` (see `AR
 both servers' full argument lists). The tool names below were confirmed present in a connected
 Playwright MCP session on 2026-07-26.
 
-A walkthrough on 2026-07-26 drove this skill's URL through the Playwright driver against the
-real trivago.dk and hit a `403` bot block, which is what the `--user-agent` flag below now
-fixes. That fix is verified at the HTTP layer but has not yet been re-run through a full
-`/watch`, so no step below should be treated as read-confirmed against the live page — see
-`BACKLOG.md` items 10 and 11.
+A walkthrough on 2026-07-26 reached the real trivago.dk through the Playwright driver but was
+blocked before reading a results page, so no step below is read-confirmed against the live site
+— see `BACKLOG.md` items 10 and 11.
 
 | Capability | `claude-in-chrome` tool | Playwright MCP tool |
 |---|---|---|
@@ -55,7 +53,7 @@ fixes. That fix is verified at the HTTP layer but has not yet been re-run throug
 page and exceed the read-only-navigation etiquette this skill (and momondo-search and
 booking-search) commit to under "Limits and etiquette".
 
-**Why `--headless --isolated`:**
+**Why these Playwright flags:**
 
 - `--headless`: a scheduled/cron run has no display; a headed browser cannot start there. This
   flag is what makes the scheduling claim above actually true. The tracked `.mcp.json` also
@@ -64,25 +62,23 @@ booking-search) commit to under "Limits and etiquette".
 - `--isolated`: a fresh profile per run, no persisted cookies or login state. This side-steps
   the privacy hazard in step 3 below (the homepage prefills the user's previous search and
   shows their recently-viewed properties) — an isolated context has no such history to leak.
-- `--user-agent` with an ordinary Chrome UA: **required for trivago specifically.** Headless
-  Chrome advertises `HeadlessChrome` in its User-Agent, and trivago's edge rejects that token
-  with `403 Access Denied` on the document itself, before any page script runs — so no
-  in-page workaround can recover it. Verified 2026-07-26: two requests to the same results
-  URL differing only by `HeadlessChrome/149` vs `Chrome/149` returned 403 and 200. momondo
-  (200) and booking (202) were indifferent to the token; only trivago blocks it. Because the
-  UA is set on the server in `.mcp.json`, no procedure step needs to know about this.
   Trade-off: consent/cookie walls appear on every run and bot-challenge risk rises, which is
   why the unattended terminal outcome below is defined.
+- `--user-agent` with an ordinary Chrome UA: **required for trivago specifically.** Headless
+  Chrome's default UA advertises `HeadlessChrome`, which trivago's edge 403s at the document
+  level, so no in-page workaround can recover it (fallback-chain condition 4). Set on the
+  server, so no procedure step needs to know. Evidence and per-source scope: `BACKLOG.md`
+  item 10.
 
 ### Unattended terminal outcome
 
 Under an unattended re-check (Playwright MCP, driven by `/watch`) there is no user to answer a
 bot challenge, consent wall, or disambiguation prompt, so the attended tail of the fallback
-chain below — step 7 and the disambiguation step 4 — is unavailable. The authoritative
-definition of the resulting terminal outcome (fall through to web search, then
-`available: false` with the reason in the report text only, reported distinctly from a genuine
-sold-out) lives in `.claude/skills/price-watch/SKILL.md`'s re-check procedure — this skill
-follows it rather than restating it. One trivago-specific note: an ambiguous destination with
+chain below — step 8 and the disambiguation step 4 — is unavailable. The authoritative
+definition of the resulting terminal outcome (fall through to web search, then record an
+unverified `price_history` entry, reported distinctly from a genuine sold-out) lives in
+`.claude/skills/price-watch/SKILL.md`'s re-check procedure — this skill follows it rather than
+restating the entry shape, which is that file's to change. One trivago-specific note: an ambiguous destination with
 no known `locationId` in hand cannot be resolved unattended and takes that same terminal outcome
 rather than guessing among the candidates.
 
@@ -229,15 +225,21 @@ Any of these conditions ends the browser attempt and drops straight to the web-s
 2. Site permission for trivago.dk denied in the extension (`claude-in-chrome` only; the
    Playwright MCP server has no equivalent per-site permission step). Also checked once per run.
 3. Bot challenge detected on the loaded page — stop navigating that page immediately.
-4. Page unreadable (both `find` and `read_page` fail, or 2-3 consecutive tool failures).
-5. Zero results for the given params.
+4. The document itself came back non-200 (`403`/`429`). Chain-ends **immediately**: no retries,
+   no re-navigation, no consent-wall handling. An edge rejection lands before any page script
+   runs, so nothing done in-page can recover it, and retrying only spends calls against a host
+   that is already refusing. Do not confuse this with condition 5 — a 403 page loads fine and is
+   perfectly readable, it just isn't the results page.
+5. Page unreadable (both a targeted element search and a full page read fail, or 2-3 consecutive
+   tool failures).
+6. Zero results for the given params.
 
 Then, in order:
 
-6. **Fallback: Claude web search** with the same destination/dates/guests, normalized into the
+7. **Fallback: Claude web search** with the same destination/dates/guests, normalized into the
    same result record with `source: "trivago-search"` (or a clearly labeled web-search variant
    if the orchestrating skill distinguishes provenance).
-7. **Final fallback: ask the user to paste listing text** (a specific hotel page, email, or
+8. **Final fallback: ask the user to paste listing text** (a specific hotel page, email, or
    screenshot-derived text), per `CLAUDE.md`'s paste-anything fallback and
    `.claude/skills/trip-scraper/SKILL.md`'s "Paste-a-listing fallback" section — this enters the
    same normalize → dedupe → score pipeline as any other candidate, but takes `"source":

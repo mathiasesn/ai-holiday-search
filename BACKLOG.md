@@ -198,15 +198,15 @@ Still open:
 
 - The `--user-agent` fix is verified at the HTTP layer only (`curl`, both UAs,
   all three sources). It has not been re-run through `/watch` itself, which
-  needs an MCP reload to pick up the changed `.mcp.json`.
+  needs an MCP reload to pick up the changed `.mcp.json` — so no browser-driven
+  source has yet been *read* through Playwright: trivago only as far as the 403,
+  momondo and booking not at all.
 - The UA pins a Chrome major version in a tracked file and will drift from
   whatever Chromium `@playwright/mcp` ships. It only has to avoid saying
   `Headless`, so drift degrades slowly rather than breaking — but it is one
   more pinned string, related to item 6.
 - `playwright-headed` is declared in `.mcp.json` but did not connect during the
   walkthrough, so the attended-debugging path remains unexercised.
-- momondo and booking have still never been read through Playwright; only
-  trivago has, and only as far as the 403.
 
 ### 11. Nothing verifies a browser-driven source
 

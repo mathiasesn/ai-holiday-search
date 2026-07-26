@@ -84,6 +84,11 @@ unavailable per its own readiness check (see the trigger list in
 `.claude/skills/trivago-search/SKILL.md` "Fallback chain"), degrade the **whole** browser-driven
 branch for this run once, rather than re-discovering the unavailability on every trip.
 
+Apply the same once-per-run economy to a **blocked host**: if a site rejects the document itself
+(a 403/429 on navigation, not a consent wall), treat that host as blocked for the rest of the run
+and send its remaining trips straight to web search. Re-navigating a host whose edge already
+refused the request wastes the navigation and every read after it on each subsequent trip.
+
 ### For every file in `watchlist/`
 
 1. Dispatch on the trip's kind (identified by `trip.source`):
@@ -100,37 +105,34 @@ branch for this run once, rather than re-discovering the unavailability on every
      etiquette limits — lives once in `.claude/skills/trivago-search/SKILL.md`; follow it rather
      than duplicating it here. On any chain-ending condition (bot challenge, consent wall, zero
      results, unreadable page), fall through to Claude web search exactly as the attended
-     fallback chain does. If web search also yields nothing, the check is terminal for this
-     trip: append a `price_history` entry with `price: null`, `available: null`, and
-     `unverified_reason` set to exactly one of `bot_challenge`, `consent_wall`, `zero_results`,
-     `unreadable_page`. Report this distinctly from a genuine sold-out (see thresholds below); a
+     fallback chain does. If web search also yields nothing, the check is terminal for this trip:
+     append a `price_history` entry with `price: null`, `available: null`, and
+     `unverified_reason` set to exactly one of `bot_challenge`, `consent_wall`, `unreadable_page`
+     — `available: null` means **could not verify**, where `available: false` asserts the trip is
+     genuinely gone. Report this distinctly from a genuine sold-out (see thresholds below); a
      blocked read is not evidence a trip is unavailable.
 
-     `available: null` means **could not verify** and is never interchangeable with
-     `available: false`, which asserts the trip is genuinely gone. Recording a blocked read as
-     `false` would make it byte-identical to a sold-out and would strand the distinction in
-     transient report text, so the reason belongs in the JSON — as this closed enum, never as
-     free prose.
+     A chain-ending **zero results** is the one exception: an empty result set that web search
+     also confirms is evidence of unavailability, so it takes the sold-out path below
+     (`available: false`), not an unverified entry.
    - **Pasted** (`source: "pasted"`): no live re-query is possible — ask the user to re-paste,
      or skip with a note.
    Every trip kind must land in one of the three branches above; none may fall through unhandled.
-2. Compare the new price/availability against the most recent **verified** `price_history` entry
-   — the latest one whose `available` is not `null` (not just the original snapshot). Entries with
-   `available: null` carry no observation, so they must be skipped when choosing the baseline;
-   using one would compare a live price against a non-reading and invent a change that never
-   happened.
+2. Pick the **baseline**: walk `price_history` backwards from the last entry and stop at the
+   first whose `available` is not `null`; if every entry is unverified, use `original_snapshot`.
+   Unverified entries carry no observation, so comparing against one would invent a change that
+   never happened. Compare the new price/availability against that baseline.
 3. Append a new `price_history` entry with `checked_at` set to now (ISO-8601, with offset).
-   `schema_version` stays `1`: `unverified_reason` is present only on unverified entries, and
-   `available: null` is a new value for an existing field rather than a shape change. Entries
+   `schema_version` stays `1` — `unverified_reason` appears only on unverified entries. Entries
    never record the driver, regardless of trip kind or which driver produced the read.
 4. Report per the thresholds below.
 
 ## Reporting thresholds
 
-- **Price drop:** new price is **≥5% lower** than the most recent prior entry → report as a
-  drop, showing € amount and % change from both the most recent check and the original snapshot.
-- **Price rise:** new price is **≥5% higher** than the most recent prior entry → report as a
-  rise, same detail.
+- **Price drop:** new price is **≥5% lower** than the step-2 baseline → report as a drop, showing
+  € amount and % change from both the baseline and the original snapshot.
+- **Price rise:** new price is **≥5% higher** than the step-2 baseline → report as a rise, same
+  detail.
 - **No material change:** difference is within ±5% → note "unchanged" in the summary but still
   record the entry.
 - **Sold out / unavailable:** adapter or web search finds no matching listing, or explicitly
@@ -139,7 +141,7 @@ branch for this run once, rather than re-discovering the unavailability on every
   runs `/watch remove`.
 - **Blocked/challenged read (browser-driven only):** the terminal condition defined above in
   "Re-check procedure" — `available: null` plus an `unverified_reason`. Reported as a **blocked
-  read**, never as a sold-out warning, and it never becomes the baseline for the next run.
+  read**, never as a sold-out warning.
 
 ## Removing a trip (`/watch remove`)
 
@@ -149,6 +151,6 @@ Delete `watchlist/<slug>.json`. Confirm the slug and destination with the user b
 
 Playwright MCP is `/watch`'s default driver because it is the only one of the two that can run
 unattended — `claude-in-chrome` needs an attended session and per-site extension permission, so
-it cannot execute on a schedule. Scheduled/cron runs require the headless server config already
-declared in the repo's tracked `.mcp.json` (`npx -y @playwright/mcp@0.0.78 --headless --isolated`);
-a headed browser cannot start where there is no display.
+it cannot execute on a schedule. Scheduled/cron runs require the headless server already declared
+in the repo's tracked `.mcp.json` (see `ARCHI.md` §7 for its argument list); a headed browser
+cannot start where there is no display.
