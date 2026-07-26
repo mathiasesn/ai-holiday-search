@@ -194,13 +194,21 @@ server in `.mcp.json`. Scoped: of the three browser-driven sources, only
 trivago blocks the headless UA — momondo returned 200 and booking 202 under
 both UAs, so this was never a general "unattended browsing is blocked" problem.
 
+**Fix confirmed end to end 2026-07-26.** After an MCP reload, `/watch` re-ran in
+a fresh session and read the trivago page through headless Playwright: no 403,
+consent wall dismissed with `browser_click`, and the stored trip priced at
+kr 5,164 — unchanged against the baseline. The baseline rule worked as written:
+the run walked back past the earlier unverified (`bot_challenge`) entry to the
+last verified one, rather than treating the blocked read as an observation. So
+trivago is now verified as *read* through Playwright, not just at the HTTP layer.
+
 Still open:
 
-- The `--user-agent` fix is verified at the HTTP layer only (`curl`, both UAs,
-  all three sources). It has not been re-run through `/watch` itself, which
-  needs an MCP reload to pick up the changed `.mcp.json` — so no browser-driven
-  source has yet been *read* through Playwright: trivago only as far as the 403,
-  momondo and booking not at all.
+- momondo and booking have still never been read through Playwright — only
+  `curl`'d. Their fast paths are unexercised under the headless driver.
+- The re-check agent's first instinct was `browser_evaluate`, which the driver
+  contract disallows; it caught itself and switched to `browser_click`. The rule
+  held, but only on a second pass — worth watching whether it holds unprompted.
 - The UA pins a Chrome major version in a tracked file and will drift from
   whatever Chromium `@playwright/mcp` ships. It only has to avoid saying
   `Headless`, so drift degrades slowly rather than breaking — but it is one

@@ -103,7 +103,7 @@ This runs the full workflow: evaluate fit, draft a day-by-day itinerary with bud
 
 Trips from the browser-driven trivago, momondo, and booking sources are re-checkable unattended too: `/watch` drives them through the Playwright MCP server declared in this repo's tracked `.mcp.json`, which runs headless and needs no attended session.
 
-A first on-demand run against the real sites (2026-07-26) confirmed the dispatch end to end — a saved trivago trip reached the browser branch and was driven through Playwright without an attended session. That run was then blocked by trivago's bot protection, which rejected headless Chrome's default User-Agent; `.mcp.json` now overrides the UA, a fix verified at the HTTP layer but not yet re-run through a full `/watch`. Expect blocked reads to happen anyway: they are reported distinctly from sold-out and never overwrite the last known good price. The *scheduled* mode (cron, CI, or a recurring Claude Code task) has still not been exercised. See `BACKLOG.md` item 10.
+A first on-demand run against the real sites (2026-07-26) confirmed the dispatch end to end — a saved trivago trip reached the browser branch and was driven through Playwright without an attended session. That run was then blocked by trivago's bot protection, which rejected headless Chrome's default User-Agent; `.mcp.json` now overrides the UA, and a later run the same day read a real trivago price through headless Playwright with no block. Expect blocked reads to happen anyway: they are reported distinctly from sold-out and never overwrite the last known good price. The *scheduled* mode (cron, CI, or a recurring Claude Code task) has still not been exercised. See `BACKLOG.md` item 10.
 
 ## File structure
 
