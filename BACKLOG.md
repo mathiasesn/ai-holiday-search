@@ -78,6 +78,12 @@ lockfile for this but has not been adopted. Also still open: enable Dependabot
 only the lockfile, not the adapters' inline headers. See also item 8: nothing
 currently verifies those headers at all.
 
+Also now open: `.mcp.json` pins the Playwright MCP server as
+`@playwright/mcp@0.0.78`, but via `npx -y`, which resolves from the npm
+registry at run time rather than a committed lockfile — a third pinning
+mechanism in this repo, alongside `uv.lock` and the adapters' PEP 723 headers,
+and not covered by the `uv sync`/Dependabot coverage described above.
+
 ### 7. Shared adapter code (`.agents/skills/_common.py`)
 
 The three `search.py` adapters share roughly 330 near-identical lines
@@ -130,7 +136,7 @@ theoretical.
 Fix: matrix the `lint-and-guards` job too, or drop the floor to what is actually
 tested. Cheap either way; worth doing alongside item 1's fixture tests.
 
-### 10. `/watch` has no path for browser-driven sources
+### 10. ~~`/watch` has no path for browser-driven sources~~ — resolved
 
 The browser-driven sources produce candidates with their own `source` values,
 but `/watch` and `.claude/skills/price-watch/SKILL.md` know only two kinds of
@@ -139,34 +145,46 @@ pasted. A browser-driven candidate matches neither, so `/watch add` on a
 `/scrape` result can save a trip that no re-check branch knows how to price
 again.
 
-Each source added since has widened this gap. It was a stays-only problem while
+Each source added since had widened this gap. It was a stays-only problem while
 `trivago-search` was the sole browser-driven source — a user could at least
 re-check flights and packages through the adapters. `momondo-search` covers all
 three verticals and `booking-search` covers stays and flights, so the
-untrackable set now includes flight and package candidates too, which are
-exactly the ones whose prices move most.
+untrackable set had grown to include flight and package candidates too, which
+are exactly the ones whose prices move most.
 
-There is a second, harder half. `price-watch` is built for unattended re-checks
-and the README says `/watch` can be scheduled via cron or CI — but the
+There was a second, harder half. `price-watch` is built for unattended re-checks
+and the README said `/watch` can be scheduled via cron or CI — but the
 `claude-in-chrome` driver needs an attended session with site permission, so it
-cannot run on a schedule at all. The two statements currently contradict each
-other.
+cannot run on a schedule at all. The two statements contradicted each other.
 
-Needs a decision, not just an edit. Options:
+Resolved by taking the first of the three options below: a second driver,
+Playwright MCP, was added as an unattended-capable substitute. Either driver
+(`claude-in-chrome` or Playwright MCP) can now execute any of the three
+browser-driven procedures; `/watch` defaults to Playwright MCP because it is
+the only one of the two that can run without an attended session, and
+`/scrape` keeps `claude-in-chrome` as its default with Playwright available as
+an opt-in. The capability mapping and the two-driver model live once in
+`.claude/skills/trivago-search/SKILL.md`, referenced by `momondo-search` and
+`booking-search` rather than restated. The options that were considered and
+not chosen:
 
-- Re-check trivago trips with a driver that can run unattended (the
-  substitutable-driver contract in `.claude/skills/trivago-search/SKILL.md`
-  exists for exactly this; Playwright MCP is the obvious candidate). Costs a new
-  dependency in a repo that currently has one.
 - Degrade browser-driven trips to Claude web search on re-check, and say plainly
   in the report that the price came from a weaker source than the original
   snapshot.
 - Refuse `/watch add` for browser-driven candidates and say why.
 
-Whichever is chosen, `price-watch/SKILL.md`, `.claude/commands/watch.md`, and the
-README's "schedule it" claim must end up agreeing. The substitutable-driver note
-lives once in `.claude/skills/trivago-search/SKILL.md` and is referenced by the
-other browser-driven skills — one driver decision covers all of them.
+`price-watch/SKILL.md`, `.claude/commands/watch.md`, and the README now agree:
+scheduling browser-driven re-checks is real, not caveated.
+
+Still open, and deliberately not overclaimed:
+
+- The unattended **scheduled** mode itself (cron, CI, or a recurring Claude
+  Code task) has not been exercised end-to-end — nor has the manual,
+  on-demand path; neither has been run against the real sites yet.
+- The live attended walkthrough (a `/scrape` run with the Playwright driver
+  selected, followed by a `/watch` re-check of a saved browser-driven trip,
+  performed once against the real sites) has not been performed. No capture
+  date for it exists yet.
 
 ### 11. Nothing verifies a browser-driven source
 
@@ -202,6 +220,12 @@ The specific decay risks, all recorded in the skills themselves:
 
 Every one of these is a silent-wrong-number risk, not a crash: the failure mode
 is a shortlist that looks fine and is priced wrong.
+
+Widened by item 10's resolution: the verification surface now spans **two
+drivers**, `claude-in-chrome` and Playwright MCP. Both read the same card
+layouts and price-basis rules, but nothing proves they stay in agreement — the
+same skill can produce different numbers depending on which driver ran it,
+which stacks a new silent-wrong-price risk on top of the ones above.
 
 This is not fixable by a normal test, and mocking the sites would only assert
 that the mock matches the doc. The realistic options are a manual

@@ -1,6 +1,6 @@
 ---
 name: price-watch
-description: Snapshot and re-check logic for /watch. Saves a trip's price snapshot to watchlist/<slug>.json when added, and on each re-check re-searches the same route/dates via trip-scraper's adapters to compare against price history and report drops, rises, and sold-out warnings.
+description: Snapshot and re-check logic for /watch. Saves a trip's price snapshot to watchlist/<slug>.json when added, and on each re-check re-searches the same route/dates via trip-scraper's adapters or the browser-driven skills to compare against price history and report drops, rises, and sold-out warnings.
 ---
 
 # Price Watch
@@ -75,12 +75,30 @@ If the same destination/dates are watched from two different sources, append a s
 
 For every file in `watchlist/`:
 
-1. Re-run the same source adapter (or the pasted-listing paraphrase, if `source: "pasted"` and
-   no live re-query is possible — in that case, ask the user to re-paste, or skip with a note).
-   Use `trip-scraper`'s fan-out and fallback rules (adapter → web search on missing credentials).
+1. Dispatch on the trip's kind (identified by `trip.source`):
+   - **Adapter-backed** (`source` is one of `flights-search`, `stays-search`,
+     `packages-search`): re-run the matching `.agents/skills/*/search.py --json` adapter for
+     the same route/dates, using `trip-scraper`'s fan-out and fallback rules (adapter → web
+     search on missing credentials).
+   - **Browser-driven** (`source` is one of `"trivago-search"`, `"momondo-search"`,
+     `"booking-search"`): re-run the same search via the Playwright MCP driver. The driver
+     contract — server config, tool-capability mapping, and etiquette limits — lives once in
+     `.claude/skills/trivago-search/SKILL.md`; follow it rather than duplicating it here. On any
+     chain-ending condition (bot challenge, consent wall, zero results, unreadable page), fall
+     through to Claude web search exactly as the attended fallback chain does. If web search
+     also yields nothing, the check is terminal for this run: append a `price_history` entry
+     with `available: false` and note the reason (bot challenge / consent wall / zero results /
+     unreadable page) in the run's report text only — never in the JSON. Report this distinctly
+     from a genuine sold-out (see thresholds below); a blocked read is not evidence a trip is
+     unavailable.
+   - **Pasted** (`source: "pasted"`): no live re-query is possible — ask the user to re-paste,
+     or skip with a note.
+   Every trip kind must land in one of the three branches above; none may fall through unhandled.
 2. Compare the new price/availability against the **most recent** `price_history` entry (not
    just the original snapshot).
-3. Append a new `price_history` entry with `checked_at` set to now (ISO-8601, with offset).
+3. Append a new `price_history` entry with `checked_at` set to now (ISO-8601, with offset). The
+   entry shape and `schema_version: 1` are unchanged regardless of trip kind or which driver
+   produced the read — entries never record the driver.
 4. Report per the thresholds below.
 
 ## Reporting thresholds
@@ -95,7 +113,22 @@ For every file in `watchlist/`:
   reports unavailability → set `available: false` for that entry and report a **sold-out
   warning**, distinct from a price change. Keep watching (do not auto-remove) unless the user
   runs `/watch remove`.
+- **Blocked/challenged read (browser-driven only):** the Playwright driver hits a bot
+  challenge, consent wall, or unreadable page and web search also fails to confirm the trip
+  either way → also set `available: false` for that entry, but report it as a **blocked read**,
+  never as a sold-out warning. The JSON entry looks identical to a genuine sold-out
+  (`available: false`, no driver recorded); the distinction lives only in the run's report
+  text. Do not let a run where several browser-driven trips are blocked read to the user as
+  mass sold-out.
 
 ## Removing a trip (`/watch remove`)
 
 Delete `watchlist/<slug>.json`. Confirm the slug and destination with the user before deleting.
+
+## Scheduling
+
+Playwright MCP is `/watch`'s default driver because it is the only one of the two that can run
+unattended — `claude-in-chrome` needs an attended session and per-site extension permission, so
+it cannot execute on a schedule. Scheduled/cron runs require the headless server config already
+declared in the repo's tracked `.mcp.json` (`npx -y @playwright/mcp@0.0.78 --headless --isolated`);
+a headed browser cannot start where there is no display.

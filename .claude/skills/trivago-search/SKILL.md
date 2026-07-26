@@ -1,13 +1,14 @@
 ---
 name: trivago-search
-description: Browser-driven stays source for /scrape that reads trivago.dk search results via the claude-in-chrome MCP tools, normalizing hotel cards into the adapter result record. Runs on every /scrape alongside stays-search (not only as its fallback), has its own multi-step fallback chain instead of the exit-code adapter protocol, and labels every price as a web-read estimate.
+description: Browser-driven stays source for /scrape that reads trivago.dk search results via either the claude-in-chrome or Playwright MCP tools, normalizing hotel cards into the adapter result record. Runs on every /scrape alongside stays-search (not only as its fallback), has its own multi-step fallback chain instead of the exit-code adapter protocol, and labels every price as a web-read estimate.
 ---
 
 # Trivago Search
 
 Browser-driven stays source used by `/scrape`. Unlike `.agents/skills/*/search.py` adapters,
-this skill has no `search.py` and no exit code — it drives the user's real Chrome session via
-`claude-in-chrome` MCP tools to read a live trivago.dk results page, then normalizes what it
+this skill has no `search.py` and no exit code — it drives a browser, via either the
+`claude-in-chrome` MCP tools (the user's real Chrome session) or the Playwright MCP tools (an
+isolated headless context), to read a live trivago.dk results page, then normalizes what it
 finds. It runs on every `/scrape`, alongside `stays-search`, not only when `stays-search` fails.
 
 trivago has no public search API and is bot-protected, so this is intentionally a Markdown
@@ -17,25 +18,68 @@ credentials, no env vars, no login, no booking. Stays only — no flights, no ca
 ## Driver model
 
 Steps below are written as capabilities, each with the concrete tool that implements it today.
+**This section is the single home of the driver contract** — `momondo-search` and
+`booking-search` reference it rather than restating the table.
 
-**Default driver: `claude-in-chrome`.** Standard Chrome-automation guidance (tab/context setup,
-no JS dialogs, etc.) applies as usual; the one skill-specific rule is: after 2-3 consecutive
-tool failures on any step, stop retrying and drop to the fallback chain below (see there for
-the full trigger list).
+**Two drivers exist, and either can execute this procedure (and momondo-search's and
+booking-search's):** `claude-in-chrome` and the Playwright MCP server. Defaults differ by
+caller: `/scrape` defaults to `claude-in-chrome` (Playwright MCP is available as an opt-in);
+`/watch` defaults to Playwright MCP, because it is the only driver that can run unattended.
+`claude-in-chrome` needs an attended session plus per-site extension permission, so it cannot
+run on a schedule — that is the sole reason the second driver exists. The shared rule for both
+drivers: after 2-3 consecutive tool failures on any step, stop retrying and drop to the
+fallback chain below (see there for the full trigger list).
 
-| Capability | `claude-in-chrome` tool |
-|---|---|
-| Open a results page for known params | `navigate` to the constructed URL |
-| Fill and drive the search form | `form_input` (fields), `computer` (clicks: autocomplete suggestion, calendar days, Apply, Search) |
-| Enumerate result cards | `find` (see "Reading result cards" below) |
-| Read a page's structure/text | `read_page`; `get_page_text` for a single card only |
-| Detect a bot challenge / dead end | `read_page` or `get_page_text` on the loaded page |
+The Playwright MCP server is declared in the repo's tracked `.mcp.json` as
+`npx -y @playwright/mcp@0.0.78 --headless --isolated`. Tool names below were confirmed live in
+a connected session on 2026-07-26.
 
-**Substitutable driver.** A Playwright-MCP-backed driver could satisfy the same capability
-table above and would additionally enable *unattended* `/watch` re-checks, which
-`claude-in-chrome` cannot do (it needs an attended user session and site permission). That
-procedure is out of scope here — this is a note recording a deliberate design decision, not a
-spec for it.
+| Capability | `claude-in-chrome` tool | Playwright MCP tool |
+|---|---|---|
+| Set up a tab / context | `tabs_context_mcp`, `tabs_create_mcp` | `browser_tabs` |
+| Open a results page for known params | `navigate` to the constructed URL | `browser_navigate` |
+| Fill and drive the search form | `form_input` (fields), `computer` (clicks: autocomplete suggestion, calendar days, Apply, Search) | `browser_fill_form`, `browser_type`, `browser_click`, `browser_select_option`, `browser_press_key` |
+| Enumerate result cards | `find` (see "Reading result cards" below) | `browser_find` (fall back to `browser_snapshot`) |
+| Read a page's structure/text | `read_page`; `get_page_text` for a single card only | `browser_snapshot` |
+| Wait for results to render | (implicit in the read tools) | `browser_wait_for` |
+| Detect a bot challenge / dead end | `read_page` or `get_page_text` on the loaded page | `browser_snapshot` (plus `browser_console_messages` when a page renders blank) |
+| Capture evidence for a report | `gif_creator` / screenshots | `browser_take_screenshot` |
+
+**Never use** `browser_evaluate` or `browser_run_code_unsafe`. Both execute arbitrary JS in the
+page and exceed the read-only-navigation etiquette this skill (and momondo-search and
+booking-search) commit to under "Limits and etiquette".
+
+**Why `--headless --isolated`:**
+
+- `--headless`: a scheduled/cron run has no display; a headed browser cannot start there. This
+  flag is what makes the scheduling claim above actually true. A user debugging the Playwright
+  path attended can drop the flag locally.
+- `--isolated`: a fresh profile per run, no persisted cookies or login state. This side-steps
+  the privacy hazard in step 3 below (the homepage prefills the user's previous search and
+  shows their recently-viewed properties) — an isolated context has no such history to leak.
+  Trade-off: consent/cookie walls appear on every run and bot-challenge risk rises, which is
+  why the unattended terminal outcome below is defined.
+
+### Unattended terminal outcome
+
+Under an unattended re-check (Playwright MCP, driven by `/watch`) there is no user to answer a
+bot challenge, consent wall, or disambiguation prompt. The attended tail of the fallback
+chain below — step 7 ("ask the user to paste listing text") and the disambiguation step 4
+("ask the user rather than guessing") — is unavailable. So, unattended:
+
+- Try the Playwright browser read. On any chain-ending condition (see "Fallback chain" below),
+  fall through to Claude web search exactly as the attended chain does.
+- If web search also yields nothing, the entry is terminal: append a `price_history` entry
+  with `available: false`.
+- The **reason** (bot challenge / consent wall / zero results / unreadable page / ambiguous
+  destination) goes in the run's report text, NOT in the JSON — `watchlist/<slug>.json` stays
+  at `schema_version: 1` and the entry shape is unchanged. Entries do not record which driver
+  produced them.
+- Report such an entry **distinctly from a genuine sold-out**. A blocked read is not evidence a
+  trip is unavailable, and a run that marks everything unavailable must not look like mass
+  sold-out.
+- An ambiguous destination with no known `locationId` in hand cannot be resolved unattended —
+  it takes this terminal outcome rather than guessing among the candidates.
 
 ## Locating a results page
 
@@ -62,7 +106,10 @@ already in hand (see "Fast path" below).
    must click a suggestion; typing and submitting without clicking is not a valid search.**
    Ambiguous names return multiple options (a verified example: "Lisbon" returned Lisbon
    Portugal, a Lisbon coast region, and three unrelated US towns named Lisbon). If the intended
-   match isn't unambiguous from the traveler's request, ask the user rather than guessing. Once
+   match isn't unambiguous from the traveler's request, ask the user rather than guessing —
+   **attended-only**: unattended, an ambiguous destination cannot be resolved this way, and
+   takes the unattended terminal outcome above unless a known `locationId` is already in hand.
+   Once
    resolved, record the destination's `locationId` (see URL grammar below) for the remainder of
    this run, so any additional destinations already resolved this run can use the fast path
    below instead of repeating disambiguation. This is in-conversation only — still no writing to
@@ -189,6 +236,8 @@ Then, in order:
    `.claude/skills/trip-scraper/SKILL.md`'s "Paste-a-listing fallback" section — this enters the
    same normalize → dedupe → score pipeline as any other candidate, but takes `"source":
    "pasted"`, **not** `"trivago-search"` (per that section; `source` feeds the dedupe key hash).
+   **Attended-only** — there is no user to ask on an unattended run; see "Unattended terminal
+   outcome" above for the substitute behavior.
 
 ## Estimate labeling
 

@@ -1,14 +1,15 @@
 ---
 name: momondo-search
-description: Browser-driven flights/stays/packages source for /scrape that reads momondo.dk search results via the claude-in-chrome MCP tools, normalizing flight, hotel, and package cards into the adapter result record. Covers three verticals (flights, stays, packages) as parallel procedures sharing one browser session and one permission check per run, each with its own independent fallback chain, and labels every price as a web-read estimate.
+description: Browser-driven flights/stays/packages source for /scrape that reads momondo.dk search results via either the claude-in-chrome or Playwright MCP tools, normalizing flight, hotel, and package cards into the adapter result record. Covers three verticals (flights, stays, packages) as parallel procedures sharing one browser session and one permission check per run, each with its own independent fallback chain, and labels every price as a web-read estimate.
 ---
 
 # Momondo Search
 
 Browser-driven source used by `/scrape`. Like `trivago-search`, this skill has no `search.py`
-and no exit code — it drives the user's real Chrome session via `claude-in-chrome` MCP tools to
-read live momondo.dk results pages, then normalizes what it finds. It runs on every `/scrape`,
-alongside the CLI adapters, not only when they fail.
+and no exit code — it drives a browser, via either the `claude-in-chrome` MCP tools (the user's
+real Chrome session) or the Playwright MCP tools (an isolated headless context), to read live
+momondo.dk results pages, then normalizes what it finds. It runs on every `/scrape`, alongside
+the CLI adapters, not only when they fail.
 
 momondo has no public search API and is bot-protected, so this is intentionally a Markdown
 procedure over a real browser rather than a portable Python adapter. No Python, no credentials,
@@ -44,8 +45,15 @@ tool failures on any step, stop retrying and drop to that vertical's fallback ch
 | Enumerate result cards, and detect a bot challenge / dead end | `find` (see "Reading result cards (all verticals)" below) |
 | Read a page's structure/text | `read_page`; `get_page_text` for a single card only |
 
-**Substitutable driver.** The Playwright-MCP substitution note in
-`.claude/skills/trivago-search/SKILL.md` ("Driver model") applies here unchanged.
+**Two drivers can execute this skill: `claude-in-chrome` and the Playwright MCP server.** The
+complete two-driver model — the full capability table (including the Playwright MCP tool per
+capability), the `--headless --isolated` rationale, the never-use rule for `browser_evaluate` /
+`browser_run_code_unsafe`, and the unattended terminal outcome — lives once in
+`.claude/skills/trivago-search/SKILL.md` ("Driver model"); this skill does not restate it.
+Either driver can run this skill's flights/stays/packages procedures unchanged. This skill's own
+attended-only fallback step is step 7 below ("ask the user to paste listing text"); unattended,
+the substitute is trivago-search's unattended terminal outcome (fall through to web search, then
+mark the entry terminal with `available: false` and report the reason in text, not JSON).
 
 ## Privacy hazard — read before driving any form
 
@@ -297,6 +305,7 @@ Then, in order, for the affected vertical only:
    `.claude/skills/trip-scraper/SKILL.md`'s "Paste-a-listing fallback" section — this enters the
    same normalize → dedupe → score pipeline as any other candidate, but takes `"source":
    "pasted"`, **not** `"momondo-search"` (per that section; `source` feeds the dedupe key hash).
+   **Attended-only** — see the "Driver model" section above for the unattended substitute.
 
 ## Estimate labeling
 

@@ -34,6 +34,7 @@ The framework encodes trip-planning best practices: structured fit criteria, rea
   [SETUP.md](SETUP.md#prerequisites) for alternatives.
 - (Optional) API keys for flight/accommodation search — see [Search sources](#search-sources). Everything degrades gracefully to Claude's web search + paste-a-listing mode.
 - (Optional) The [Claude Chrome extension](https://claude.ai/chrome), for the browser-driven trivago.dk, momondo.dk, and booking.com sources. Without it, `/scrape` falls back to web search — nothing breaks.
+- **Node.js (`npx`)**, so Claude Code can start the Playwright MCP server declared in this repo's tracked `.mcp.json` (`npx -y @playwright/mcp@0.0.78 --headless --isolated`). This is what lets `/watch` re-check browser-driven trips unattended, and it's the driver `/scrape` can opt into as well; without Node, `.mcp.json` fails to start and both commands fall back to their non-browser paths.
 
 ## Quick start
 
@@ -100,13 +101,14 @@ This runs the full workflow: evaluate fit, draft a day-by-day itinerary with bud
 
 `/watch` stores a snapshot of each saved trip in `watchlist/` and, on each run, re-searches the same route/dates and reports drops, rises, and sold-out warnings. Run it manually or schedule it (cron, CI, or Claude Code on a recurring task).
 
-Scheduling works for trips found through the API adapters. Trips that came from the browser-driven trivago, momondo, or booking sources are not yet re-checkable unattended, because those sources need an attended browser session — see [BACKLOG.md](BACKLOG.md) item 10.
+Trips from the browser-driven trivago, momondo, and booking sources are re-checkable unattended too: `/watch` drives them through the Playwright MCP server declared in this repo's tracked `.mcp.json`, which runs headless and needs no attended session. This is documented but not yet proven in practice: neither the unattended *scheduled* mode (cron, CI, or a recurring Claude Code task) nor a manual, on-demand run has been exercised against the real sites yet.
 
 ## File structure
 
 ```
 ai-holiday-search/
 ├── CLAUDE.md                            # Framework/workflow rules only (no personal data)
+├── .mcp.json                            # Playwright MCP browser driver (pinned, unattended-capable)
 ├── .claude/
 │   ├── commands/
 │   │   ├── setup.md                     # /setup onboarding (documents, paste, or interview)

@@ -1,7 +1,7 @@
 ---
 description: Search flights, stays, and packages against your profile and present fit-scored matches
 argument-hint: "[optional steering, e.g. 'warm in late October, under €900/person, max 5h flight']"
-allowed-tools: Read, Write, Bash, Glob, WebSearch, WebFetch, mcp__claude-in-chrome__tabs_context_mcp, mcp__claude-in-chrome__tabs_create_mcp, mcp__claude-in-chrome__navigate, mcp__claude-in-chrome__get_page_text, mcp__claude-in-chrome__read_page, mcp__claude-in-chrome__find, mcp__claude-in-chrome__form_input
+allowed-tools: Read, Write, Bash, Glob, WebSearch, WebFetch, mcp__claude-in-chrome__tabs_context_mcp, mcp__claude-in-chrome__tabs_create_mcp, mcp__claude-in-chrome__navigate, mcp__claude-in-chrome__get_page_text, mcp__claude-in-chrome__read_page, mcp__claude-in-chrome__find, mcp__claude-in-chrome__form_input, mcp__playwright__browser_tabs, mcp__playwright__browser_navigate, mcp__playwright__browser_fill_form, mcp__playwright__browser_type, mcp__playwright__browser_click, mcp__playwright__browser_select_option, mcp__playwright__browser_press_key, mcp__playwright__browser_find, mcp__playwright__browser_snapshot, mcp__playwright__browser_wait_for, mcp__playwright__browser_console_messages, mcp__playwright__browser_take_screenshot
 ---
 
 # /scrape — Search orchestration
@@ -13,6 +13,7 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 
 ## Inputs
 - `profile/01-traveler-profile.md` … `profile/06-packing-and-prep.md` — must exist and be filled.
+- `profile/tooling.md` — optional. Holds the browser-driver preference for this run. If absent, or present but missing the driver field, default to `claude-in-chrome`; its absence is normal and must never trigger the "run `/setup`" precondition below, which only checks the six numbered files.
 - `$ARGUMENTS` — optional freeform steering (e.g. `warm in late October, under €900/person, max 5h flight`). Applies to this run only; never edits the profile.
 - `.claude/skills/trip-scraper/search-queries.md` — default destinations, date windows, and sources.
 - `.claude/skills/holiday-planner/03-trip-evaluation.md` — scoring framework.
@@ -25,18 +26,19 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 ## State touched
 - Reads: everything under Inputs above.
 - Writes: `trip_scraper/seen.json` (append newly seen candidates), and a results snapshot under `trip_scraper/` (e.g. `trip_scraper/results-<date>.json`) for this run's output.
-- Never writes or edits `profile/` files — only `/setup` does.
-- Opens a browser tab (via `claude-in-chrome`) for the `trivago-search` step, but only on runs
-  whose resolved query has a stay component (not on flights-only or packages-only runs).
-- Also opens a browser tab (via `claude-in-chrome`) for the `momondo-search` step, covering
-  whichever of flights/stays/packages the resolved query calls for — see step 4 below.
-- Also opens a browser tab (via `claude-in-chrome`) for the `booking-search` step, covering
-  whichever of stays/flights the resolved query calls for (no packages vertical) — stays and
-  flights share one browser session and one permission check with each other, per step 4 below.
+- Never writes or edits `profile/` files — only `/setup` does. (Reads `profile/tooling.md` if present, but never writes it.)
+- Opens a browser tab for the `trivago-search`, `momondo-search`, and `booking-search` steps, using
+  whichever driver is resolved in step 0 below (`claude-in-chrome` by default, or Playwright MCP if
+  `profile/tooling.md` opts in) — but only on runs whose resolved query calls for that source's
+  vertical (e.g. no `trivago-search` tab on a flights-only or packages-only run). `momondo-search`
+  and `booking-search` each cover whichever of their verticals the run calls for; `booking-search`'s
+  stays and flights verticals share one browser session and one permission check with each other.
 
 ## Steps
 
-1. **Load the profile.** Read all six `profile/*.md` files. If `profile/` doesn't exist or any file still contains `<!-- FILL IN -->` markers, stop and tell the user to run `/setup` first — do not proceed with a partial profile.
+0. **Resolve the browser driver.** Read `profile/tooling.md` if it exists. If the file or its `/scrape` driver field is absent, use the default `claude-in-chrome`; if present, honor whatever it specifies (`claude-in-chrome` or Playwright MCP). This absence is normal and silent — it is not a profile-completeness problem and must not trigger step 1's check.
+
+1. **Load the profile.** Read all six numbered `profile/*.md` files (`01-traveler-profile.md` … `06-packing-and-prep.md`). If `profile/` doesn't exist or any of those six still contains `<!-- FILL IN -->` markers, stop and tell the user to run `/setup` first — do not proceed with a partial profile. This check never considers `profile/tooling.md`; its absence does not block this step.
 
 2. **Merge steering args.** If `$ARGUMENTS` is present, parse it for overrides (season/dates, budget ceiling, max travel time, destination hints, etc.). These override the corresponding profile defaults **for this run only** — state clearly which defaults were overridden and with what value. Never write the override back into `profile/`.
 
@@ -52,15 +54,16 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
    following `.claude/skills/trivago-search/SKILL.md`. It has no CLI and no exit code, so it
    can't fail this way — instead it follows its own fallback chain, defined authoritatively in
    that skill's `SKILL.md` (do not re-enumerate the triggers here). The run must complete even
-   when Chrome is unavailable. Note in the final output which sources used a live source (API or
-   browser) vs. a fallback.
+   when the resolved driver is unavailable. Note in the final output which sources used a live
+   source (API or browser) vs. a fallback.
 
    Also run `momondo-search` as a first-class source across whichever of flights/stays/packages
    the resolved query calls for, following `.claude/skills/momondo-search/SKILL.md`. Like
    `trivago-search`, it has no CLI and no exit code — it follows its own fallback chain, defined
    authoritatively in that skill's `SKILL.md` (do not re-enumerate the triggers here). Which of
    its verticals run is governed by the "Vertical selection" rule in
-   `.claude/skills/trip-scraper/SKILL.md`. The run must complete even when Chrome is unavailable.
+   `.claude/skills/trip-scraper/SKILL.md`. The run must complete even when the resolved driver is
+   unavailable.
 
    Also run `booking-search` as a first-class source across whichever of stays/flights the
    resolved query calls for, following `.claude/skills/booking-search/SKILL.md`. Like
@@ -68,8 +71,8 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
    authoritatively in that skill's `SKILL.md` (do not re-enumerate the triggers here). It has
    **no packages vertical** — booking.com has no bundled flight+hotel package product. Its stays
    and flights verticals share one browser session and one permission check with each other, and
-   are selected by the same "Vertical selection" rule. The run must complete even when Chrome
-   is unavailable.
+   are selected by the same "Vertical selection" rule. The run must complete even when the
+   resolved driver is unavailable.
 
 5. **Deduplicate.** Read `trip_scraper/seen.json` (if absent, treat it as `{"schema_version": 1, "entries": {}}` — when writing it for the first time, include `schema_version`). Derive each candidate's dedupe key exactly as specified in `.claude/skills/trip-scraper/SKILL.md` — that file is the authority on the key derivation and the file format; do not invent an ad hoc match. For each candidate:
    - If its key is **not** present in `entries`, it's genuinely new — keep it for scoring and presentation.

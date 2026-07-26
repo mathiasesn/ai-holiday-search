@@ -9,16 +9,20 @@ allowed-tools: Read, Write, Glob, Bash(mkdir:*)
 ## Purpose
 Populate the local, gitignored `profile/` folder (`01-traveler-profile.md` … `06-packing-and-prep.md`)
 and `trip_tracker.csv` from the framework templates in `.claude/skills/holiday-planner/`, so
-`/scrape` and `/plan` have a real profile to evaluate trips against.
+`/scrape` and `/plan` have a real profile to evaluate trips against. Also seeds `profile/tooling.md`,
+the browser-driver preference — a tooling knob, not traveler data, so it is deliberately kept
+separate from the six numbered traveler-preference files and never merged into them.
 
 ## Inputs
 - `$ARGUMENTS` — optional. If present, treat it as a pasted freeform description (mode b).
 - `documents/` folder — may contain `past-trips/` and `preferences/` material (mode a).
 - Existing `profile/` files — if present, this run is an update, not a first fill.
+- Existing `profile/tooling.md` — if present, this run must not silently overwrite it.
 
 ## State touched
 - Reads (never writes): `.claude/skills/holiday-planner/01-traveler-profile.md` … `06-packing-and-prep.md` (templates with `<!-- FILL IN -->` markers).
 - Writes: `profile/01-traveler-profile.md` … `profile/06-packing-and-prep.md`.
+- Writes: `profile/tooling.md` (browser-driver preference; not one of the six numbered templates and not derived from one) if it does not already exist, or after confirming an overwrite with the user if it does.
 - Writes: `trip_tracker.csv` (copied from `trip_tracker.csv.example`) if it does not already exist.
 - Never touches `documents/`, `.claude/skills/`, or any tracked framework file.
 
@@ -56,10 +60,13 @@ and `trip_tracker.csv` from the framework templates in `.claude/skills/holiday-p
      - Replace every `<!-- FILL IN -->` marker with the corresponding captured information. Leave the surrounding structure and framework rules in the template intact — only fill markers, don't rewrite the scaffold.
      - Write the result to `profile/<name>.md`, creating the `profile/` directory first if needed.
    - If `trip_tracker.csv` does not already exist at the repo root, copy `trip_tracker.csv.example` to `trip_tracker.csv` unmodified (header row only).
+   - **Seed `profile/tooling.md`** — the browser-driver preference, documented in `ARCHI.md`. This is not one of the six numbered traveler-preference templates and must never be merged into them; it holds a tooling knob, not travel data.
+     - If `profile/tooling.md` does not exist, write it with the caller defaults: `/scrape` → `claude-in-chrome`, `/watch` → Playwright MCP.
+     - If it already exists, treat this the same as an existing filled profile elsewhere in this flow: do not clobber it silently. Tell the user it already has driver preferences set and ask whether to keep it as-is or reset it to the caller defaults.
 
-7. **State the privacy boundary.** Tell the user explicitly: `profile/` (and `trip_tracker.csv`) are gitignored, contain their personal data, and must never be committed to the fork. If they intend to share the repo or open a PR, these files stay local.
+7. **State the privacy boundary.** Tell the user explicitly: `profile/` (including `tooling.md`) and `trip_tracker.csv` are gitignored, contain their personal data, and must never be committed to the fork. If they intend to share the repo or open a PR, these files stay local.
 
 8. **Echo a summary for confirmation.** Print a short recap of the captured profile — group composition, home airports, budget range, style, top dealbreakers, and 2-3 history highlights with their stated opinions — and ask the user to confirm it's accurate or point out corrections. Do not treat the profile as final until confirmed; re-write the affected file(s) if the user corrects something.
 
 ## Output
-A confirmed, filled `profile/` folder ready for `/scrape` and `/plan`, plus `trip_tracker.csv` if it was missing.
+A confirmed, filled `profile/` folder (including `tooling.md`) ready for `/scrape` and `/plan`, plus `trip_tracker.csv` if it was missing.
