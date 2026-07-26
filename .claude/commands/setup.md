@@ -9,9 +9,8 @@ allowed-tools: Read, Write, Glob, Bash(mkdir:*)
 ## Purpose
 Populate the local, gitignored `profile/` folder (`01-traveler-profile.md` … `06-packing-and-prep.md`)
 and `trip_tracker.csv` from the framework templates in `.claude/skills/holiday-planner/`, so
-`/scrape` and `/plan` have a real profile to evaluate trips against. Also seeds `profile/tooling.md`,
-the browser-driver preference — a tooling knob, not traveler data, so it is deliberately kept
-separate from the six numbered traveler-preference files and never merged into them.
+`/scrape` and `/plan` have a real profile to evaluate trips against. Also seeds
+`profile/tooling.md`, the browser-driver preference (see step 6 for what that is and isn't).
 
 ## Inputs
 - `$ARGUMENTS` — optional. If present, treat it as a pasted freeform description (mode b).
@@ -22,7 +21,7 @@ separate from the six numbered traveler-preference files and never merged into t
 ## State touched
 - Reads (never writes): `.claude/skills/holiday-planner/01-traveler-profile.md` … `06-packing-and-prep.md` (templates with `<!-- FILL IN -->` markers).
 - Writes: `profile/01-traveler-profile.md` … `profile/06-packing-and-prep.md`.
-- Writes: `profile/tooling.md` (browser-driver preference; not one of the six numbered templates and not derived from one) if it does not already exist, or after confirming an overwrite with the user if it does.
+- Writes: `profile/tooling.md` (browser-driver preference; see step 6) if it does not already exist, or after confirming an overwrite with the user if it does.
 - Writes: `trip_tracker.csv` (copied from `trip_tracker.csv.example`) if it does not already exist.
 - Never touches `documents/`, `.claude/skills/`, or any tracked framework file.
 

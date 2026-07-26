@@ -47,7 +47,7 @@ A defining constraint: **every external-data path degrades gracefully.** No adap
 | Host agent | Claude Code | Commands, skills, and subagent (`Task`/`Agent`) spawning |
 | Optional external API | Amadeus Self-Service (flights) | Free tier; stays/packages ship without a bundled API |
 | Optional browser drivers | `claude-in-chrome` MCP tools, Playwright MCP | Only for browser-driven sources (§8). Either can run all three (trivago/momondo/booking). `/scrape` defaults to `claude-in-chrome` (attended, per-site permission); `/watch` defaults to Playwright (the only one that runs unattended). Preference resolved via `profile/tooling.md` (§9); absent ⇒ caller default. Neither present ⇒ web-search fallback |
-| MCP server | Playwright, declared in tracked `.mcp.json` | `npx -y @playwright/mcp@0.0.78 --headless --isolated` — headless for unattended/cron runs, isolated (fresh profile, no persisted cookies) per run |
+| MCP server | Two Playwright servers, declared in tracked `.mcp.json` | `playwright`: `npx -y @playwright/mcp@0.0.78 --headless --isolated` — headless for unattended/cron runs. `playwright-headed`: same version, `--isolated` only (no `--headless`) — for attended debugging with a visible browser. Both isolated (fresh profile, no persisted cookies) per run; see §7 |
 
 There is no test framework, no linter config, and no formatter config in this repo. `tools/lint_skills.py` is a bespoke structural linter, not a Python style linter. Adding real tests is `BACKLOG.md` item 1.
 
@@ -66,7 +66,7 @@ ai-holiday-search/
 ├── uv.lock                         # Committed lock for the project env (NOT the adapters)
 ├── .python-version                 # 3.12 — dev pin uv provisions
 ├── .gitignore                      # Encodes the personal-data boundary (see §9)
-├── .mcp.json                       # Tracked MCP config: declares the headless Playwright server (§7)
+├── .mcp.json                       # Tracked MCP config: headless + headed Playwright servers (§7)
 ├── trip_tracker.csv.example        # Header-only template; /setup copies it to gitignored trip_tracker.csv
 │
 ├── .claude/                        # Claude Code layer (host-specific)
@@ -155,7 +155,11 @@ No tests exist. `BACKLOG.md` item 1 explains why that is the highest-priority ga
 
 ## 7. Configuration
 
-Adapter configuration is environment variables; there is no adapter-specific config file. Every variable is **optional** — unset means the adapter takes its documented fallback path. The one exception is MCP server configuration: tracked `.mcp.json` at the repo root declares the Playwright MCP server (`npx -y @playwright/mcp@0.0.78 --headless --isolated`) that the `/watch` browser path (and the `/scrape` Playwright opt-in) depend on — see §3.
+Adapter configuration is environment variables; there is no adapter-specific config file. Every variable is **optional** — unset means the adapter takes its documented fallback path. The one exception is MCP server configuration: tracked `.mcp.json` at the repo root declares two Playwright MCP servers — see §3.
+
+**`playwright`** (`npx -y @playwright/mcp@0.0.78 --headless --isolated`) is the one the `/watch` browser path (and the `/scrape` Playwright opt-in) depend on. `--headless`: a scheduled/cron run has no display, so a headed browser cannot start there. `--isolated`: a fresh profile per run, no persisted cookies or login state — this is what neutralizes the browser-driven skills' prefilled-previous-search privacy hazard (trivago/momondo/booking all arrive prefilled from account history when a real, logged-in session is used instead). Trade-off: consent/cookie walls appear on every run, which is why the browser-driven skills define an unattended terminal outcome.
+
+**`playwright-headed`** (`npx -y @playwright/mcp@0.0.78 --isolated`, no `--headless`) is a second, tracked server for attended debugging with a visible browser window — registered out of the box so `/scrape`'s Playwright opt-in can be run headed without any manual `claude mcp add`. It keeps `--isolated` for the same privacy reason as above. Point the driver at it for a debugging session, then go back to `playwright` for normal use.
 
 | Variable | Used by | Effect when unset |
 |---|---|---|

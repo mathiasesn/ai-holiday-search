@@ -73,7 +73,18 @@ If the same destination/dates are watched from two different sources, append a s
 
 ## Re-check procedure (`/watch`)
 
-For every file in `watchlist/`:
+### Once per run, before the per-trip loop
+
+If any watched trip is browser-driven (`trip.source` one of `"trivago-search"`,
+`"momondo-search"`, `"booking-search"`), resolve the driver once (per `/watch`'s own
+driver-resolution step) and, if it's available, open **one** browser context and clear its
+consent/cookie wall **once** — not per trip. Reuse that same context for every browser-driven
+trip in this run; do not re-open a context or re-clear the wall per trip. If the driver is
+unavailable per its own readiness check (see the trigger list in
+`.claude/skills/trivago-search/SKILL.md` "Fallback chain"), degrade the **whole** browser-driven
+branch for this run once, rather than re-discovering the unavailability on every trip.
+
+### For every file in `watchlist/`
 
 1. Dispatch on the trip's kind (identified by `trip.source`):
    - **Adapter-backed** (`source` is one of `flights-search`, `stays-search`,
@@ -81,16 +92,19 @@ For every file in `watchlist/`:
      the same route/dates, using `trip-scraper`'s fan-out and fallback rules (adapter → web
      search on missing credentials).
    - **Browser-driven** (`source` is one of `"trivago-search"`, `"momondo-search"`,
-     `"booking-search"`): re-run the same search via the Playwright MCP driver. The driver
-     contract — server config, tool-capability mapping, and etiquette limits — lives once in
-     `.claude/skills/trivago-search/SKILL.md`; follow it rather than duplicating it here. On any
-     chain-ending condition (bot challenge, consent wall, zero results, unreadable page), fall
-     through to Claude web search exactly as the attended fallback chain does. If web search
-     also yields nothing, the check is terminal for this run: append a `price_history` entry
-     with `available: false` and note the reason (bot challenge / consent wall / zero results /
-     unreadable page) in the run's report text only — never in the JSON. Report this distinctly
-     from a genuine sold-out (see thresholds below); a blocked read is not evidence a trip is
-     unavailable.
+     `"booking-search"`): using the shared context opened above, **navigate to the stored
+     `trip.url` first**; only drive the search form (per that source's documented fast/primary
+     path) if `trip.url` no longer resolves to a usable results page. This also removes most of
+     the unattended-disambiguation hazard (e.g. trivago's autocomplete), since a stored URL
+     needs no destination resolution. The driver contract — tool-capability mapping and
+     etiquette limits — lives once in `.claude/skills/trivago-search/SKILL.md`; follow it rather
+     than duplicating it here. On any chain-ending condition (bot challenge, consent wall, zero
+     results, unreadable page), fall through to Claude web search exactly as the attended
+     fallback chain does. If web search also yields nothing, the check is terminal for this
+     trip: append a `price_history` entry with `available: false` and note the reason (bot
+     challenge / consent wall / zero results / unreadable page) in the run's report text only —
+     never in the JSON. Report this distinctly from a genuine sold-out (see thresholds below); a
+     blocked read is not evidence a trip is unavailable.
    - **Pasted** (`source: "pasted"`): no live re-query is possible — ask the user to re-paste,
      or skip with a note.
    Every trip kind must land in one of the three branches above; none may fall through unhandled.
@@ -113,13 +127,8 @@ For every file in `watchlist/`:
   reports unavailability → set `available: false` for that entry and report a **sold-out
   warning**, distinct from a price change. Keep watching (do not auto-remove) unless the user
   runs `/watch remove`.
-- **Blocked/challenged read (browser-driven only):** the Playwright driver hits a bot
-  challenge, consent wall, or unreadable page and web search also fails to confirm the trip
-  either way → also set `available: false` for that entry, but report it as a **blocked read**,
-  never as a sold-out warning. The JSON entry looks identical to a genuine sold-out
-  (`available: false`, no driver recorded); the distinction lives only in the run's report
-  text. Do not let a run where several browser-driven trips are blocked read to the user as
-  mass sold-out.
+- **Blocked/challenged read (browser-driven only):** the terminal condition defined above in
+  "Re-check procedure" — reported as a **blocked read**, never as a sold-out warning.
 
 ## Removing a trip (`/watch remove`)
 

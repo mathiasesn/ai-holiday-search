@@ -32,29 +32,16 @@ the chain below — a bot challenge on flights must not suppress stays or packag
 
 ## Driver model
 
-Steps below are written as capabilities, each with the concrete tool that implements it today.
-
 **Default driver: `claude-in-chrome`.** Standard Chrome-automation guidance (tab/context setup,
 no JS dialogs, etc.) applies as usual; the one skill-specific rule is: after 2-3 consecutive
 tool failures on any step, stop retrying and drop to that vertical's fallback chain below.
 
-| Capability | `claude-in-chrome` tool |
-|---|---|
-| Open a results page for known params | `navigate` to the constructed URL |
-| Fill and drive a search form | `form_input` (fields), `computer` (clicks: autocomplete suggestion, calendar days, checkboxes, Søg) |
-| Enumerate result cards, and detect a bot challenge / dead end | `find` (see "Reading result cards (all verticals)" below) |
-| Read a page's structure/text | `read_page`; `get_page_text` for a single card only |
-
-**Two drivers can execute this skill: `claude-in-chrome` and the Playwright MCP server.** The
-complete two-driver model — the full capability table (including the Playwright MCP tool per
-capability), the `--headless --isolated` rationale, the never-use rule for `browser_evaluate` /
-`browser_run_code_unsafe`, and the unattended terminal outcome — lives once in
-`.claude/skills/trivago-search/SKILL.md` ("Driver model"); this skill does not restate it.
-Either driver can run this skill's flights/stays/packages procedures unchanged. This skill's own
-attended-only fallback step is step 7 below ("ask the user to paste listing text"); unattended,
-the substitute is the unattended terminal outcome authoritatively defined in
-`.claude/skills/price-watch/SKILL.md`'s "Re-check procedure" (fall through to web search, then
-mark the entry terminal with `available: false` and report the reason in text, not JSON).
+Either driver can run this skill's flights/stays/packages procedures unchanged. The two-driver
+model lives once in `.claude/skills/trivago-search/SKILL.md` ("Driver model") and applies here
+unchanged — read it there; this file does not restate any part of it. This
+skill's own attended-only fallback step is step 7 below ("ask the user to paste listing text");
+unattended, the substitute is the terminal outcome authoritatively defined in
+`.claude/skills/price-watch/SKILL.md` ("Re-check procedure").
 
 ## Privacy hazard — read before driving any form
 
@@ -89,10 +76,12 @@ This applies to all three verticals below.
 
 ## Reading result cards (all verticals)
 
-Use `find` to enumerate result cards; fall back to `read_page` only if `find` returns nothing —
-don't run both by default, that costs a redundant full-page read per vertical. **Never
-`get_page_text` to enumerate** — it under-reports a list. `find`'s result is also the
-bot-challenge check for that page load: if it comes back empty or challenge-shaped, that is the
+Enumerate result cards; fall back to reading the page's full structure only if enumeration
+returns nothing — don't run both by default, that costs a redundant full-page read per
+vertical. **Never read a single card's text to enumerate the whole list** (a `claude-in-chrome`
+hazard specific to `get_page_text`, which under-reports a list by targeting one card). The
+enumeration result is also the bot-challenge check for that page load: if it comes back empty
+or challenge-shaped, that is the
 signal to fall back, so no separate detection read is needed. Ignore `Annonce`-marked cards.
 
 Each vertical's own section below lists only the fields to extract and its price trap.
@@ -289,11 +278,15 @@ never suppresses the others.
 Any of these conditions ends the browser attempt for that vertical and drops straight to the
 web-search fallback:
 
-1. Extension not connected, or `tabs_context_mcp` shows no usable tab. Checked once per run
-   (shared across all three verticals), not once per vertical.
-2. Site permission for momondo.dk denied in the extension. Also checked once per run.
+1. The driver is unavailable per its own readiness check, checked once per run (shared across
+   all three verticals), not once per vertical — for `claude-in-chrome`, the extension not
+   connected or `tabs_context_mcp` showing no usable tab; for the Playwright MCP server, it not
+   being connected.
+2. Site permission for momondo.dk denied in the extension (`claude-in-chrome` only; the
+   Playwright MCP server has no equivalent per-site permission step). Also checked once per run.
 3. Bot challenge detected on the loaded page — stop navigating that page immediately.
-4. Page unreadable (both `find` and `read_page` fail, or 2-3 consecutive tool failures).
+4. Page unreadable (both enumeration and a full-page structure read fail, or 2-3 consecutive
+   tool failures).
 5. Zero results for the given params.
 
 Then, in order, for the affected vertical only:

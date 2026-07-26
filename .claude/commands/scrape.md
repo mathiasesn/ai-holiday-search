@@ -13,7 +13,7 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 
 ## Inputs
 - `profile/01-traveler-profile.md` … `profile/06-packing-and-prep.md` — must exist and be filled.
-- `profile/tooling.md` — optional. Holds the browser-driver preference for this run. If absent, or present but missing the driver field, default to `claude-in-chrome`; its absence is normal and must never trigger the "run `/setup`" precondition below, which only checks the six numbered files.
+- `profile/tooling.md` — optional. Holds the browser-driver preference for this run. If absent, or present but missing the driver field, default to `claude-in-chrome` (see step 0 for the absence rule).
 - `$ARGUMENTS` — optional freeform steering (e.g. `warm in late October, under €900/person, max 5h flight`). Applies to this run only; never edits the profile.
 - `.claude/skills/trip-scraper/search-queries.md` — default destinations, date windows, and sources.
 - `.claude/skills/holiday-planner/03-trip-evaluation.md` — scoring framework.
@@ -38,7 +38,7 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
 
 0. **Resolve the browser driver.** Read `profile/tooling.md` if it exists. If the file or its `/scrape` driver field is absent, use the default `claude-in-chrome`; if present, honor whatever it specifies (`claude-in-chrome` or Playwright MCP). This absence is normal and silent — it is not a profile-completeness problem and must not trigger step 1's check.
 
-1. **Load the profile.** Read all six numbered `profile/*.md` files (`01-traveler-profile.md` … `06-packing-and-prep.md`). If `profile/` doesn't exist or any of those six still contains `<!-- FILL IN -->` markers, stop and tell the user to run `/setup` first — do not proceed with a partial profile. This check never considers `profile/tooling.md`; its absence does not block this step.
+1. **Load the profile.** Read the six numbered files. If `profile/` doesn't exist or any of those six still contains `<!-- FILL IN -->` markers, stop and tell the user to run `/setup` first — do not proceed with a partial profile.
 
 2. **Merge steering args.** If `$ARGUMENTS` is present, parse it for overrides (season/dates, budget ceiling, max travel time, destination hints, etc.). These override the corresponding profile defaults **for this run only** — state clearly which defaults were overridden and with what value. Never write the override back into `profile/`.
 

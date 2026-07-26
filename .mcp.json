@@ -3,6 +3,10 @@
     "playwright": {
       "command": "npx",
       "args": ["-y", "@playwright/mcp@0.0.78", "--headless", "--isolated"]
+    },
+    "playwright-headed": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@0.0.78", "--isolated"]
     }
   }
 }

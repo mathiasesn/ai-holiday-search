@@ -39,30 +39,16 @@ chain below — a bot challenge on flights must not suppress stays.
 
 ## Driver model
 
-Steps below are written as capabilities, each with the concrete tool that implements it today.
-
 **Default driver: `claude-in-chrome`.** Standard Chrome-automation guidance (tab/context setup, no
 JS dialogs, etc.) applies as usual; the one skill-specific rule is: after 2-3 consecutive tool
 failures on any step, stop retrying and drop to that vertical's fallback chain below.
 
-| Capability | `claude-in-chrome` tool |
-|---|---|
-| Open a results page for known params | `navigate` to the constructed URL |
-| Fill and drive a search form | `form_input` (fields), `computer` (clicks: autocomplete suggestion, calendar days, occupancy/passenger steppers, Søg) |
-| Enumerate result cards | `find` (see "Reading result cards" below) |
-| Read a page's structure/text | `read_page`; `get_page_text` for a single card only |
-| Detect a bot challenge / dead end | `find` (empty or challenge-shaped result) or `read_page` on the loaded page |
-
-**Two drivers can execute this skill: `claude-in-chrome` and the Playwright MCP server.** The
-complete two-driver model — the full capability table (including the Playwright MCP tool per
-capability), the `--headless --isolated` rationale, the never-use rule for `browser_evaluate` /
-`browser_run_code_unsafe`, and the unattended terminal outcome — lives once in
-`.claude/skills/trivago-search/SKILL.md` ("Driver model"); this skill does not restate it. Either
-driver can run this skill's stays/flights procedures unchanged. This skill's own attended-only
-fallback step is step 7 below ("ask the user to paste listing text"); unattended, the substitute
-is the unattended terminal outcome authoritatively defined in
-`.claude/skills/price-watch/SKILL.md`'s "Re-check procedure" (fall through to web search, then
-mark the entry terminal with `available: false` and report the reason in text, not JSON).
+Either driver can run this skill's stays/flights procedures unchanged. The two-driver model
+lives once in `.claude/skills/trivago-search/SKILL.md` ("Driver model") and applies here
+unchanged — read it there; this file does not restate any part of it. This
+skill's own attended-only fallback step is step 7 below ("ask the user to paste listing text");
+unattended, the substitute is the terminal outcome authoritatively defined in
+`.claude/skills/price-watch/SKILL.md` ("Re-check procedure").
 
 ## Privacy hazard — read before driving any form
 
@@ -76,9 +62,11 @@ does appear the same way.
 
 ## Reading result cards
 
-Use `find` to enumerate result cards; fall back to `read_page` only if `find` returns nothing —
-don't run both by default. **Never `get_page_text` to enumerate** — it under-reports a list, per
-the same hazard documented for trivago and momondo. Ignore sponsored/promo-labelled and
+Enumerate result cards; fall back to reading the page's full structure only if enumeration
+returns nothing — don't run both by default. **Never read a single card's text to enumerate the
+whole list** (a `claude-in-chrome` hazard specific to `get_page_text`, which under-reports a
+list by targeting one card — the same hazard documented for trivago and momondo). Ignore
+sponsored/promo-labelled and
 interstitial cards, and treat any sign-in-gated ("Genius" / "Secret Deal") price as requiring an
 account rather than a real comparable price — none were observed in this run (not logged in), but
 one must be assumed possible.
@@ -300,11 +288,15 @@ flights fall back **independently** — a failure on one never suppresses the ot
 Any of these conditions ends the browser attempt for that vertical and drops straight to the
 web-search fallback:
 
-1. Extension not connected, or `tabs_context_mcp` shows no usable tab. Checked once per run
-   (shared across both verticals), not once per vertical.
-2. Site permission for booking.com denied in the extension. Also checked once per run.
+1. The driver is unavailable per its own readiness check, checked once per run (shared across
+   both verticals), not once per vertical — for `claude-in-chrome`, the extension not connected
+   or `tabs_context_mcp` showing no usable tab; for the Playwright MCP server, it not being
+   connected.
+2. Site permission for booking.com denied in the extension (`claude-in-chrome` only; the
+   Playwright MCP server has no equivalent per-site permission step). Also checked once per run.
 3. Bot challenge detected on the loaded page — stop navigating that page immediately.
-4. Page unreadable (both `find` and `read_page` fail, or 2-3 consecutive tool failures).
+4. Page unreadable (both enumeration and a full-page structure read fail, or 2-3 consecutive
+   tool failures).
 5. Zero results for the given params.
 
 Then, in order, for the affected vertical only:

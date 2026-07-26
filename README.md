@@ -34,7 +34,7 @@ The framework encodes trip-planning best practices: structured fit criteria, rea
   [SETUP.md](SETUP.md#prerequisites) for alternatives.
 - (Optional) API keys for flight/accommodation search — see [Search sources](#search-sources). Everything degrades gracefully to Claude's web search + paste-a-listing mode.
 - (Optional) The [Claude Chrome extension](https://claude.ai/chrome), for the browser-driven trivago.dk, momondo.dk, and booking.com sources. Without it, `/scrape` falls back to web search — nothing breaks.
-- **Node.js (`npx`)**, so Claude Code can start the Playwright MCP server declared in this repo's tracked `.mcp.json` (`npx -y @playwright/mcp@0.0.78 --headless --isolated`). This is what lets `/watch` re-check browser-driven trips unattended, and it's the driver `/scrape` can opt into as well; without Node, `.mcp.json` fails to start: `/watch` falls back to its non-browser paths (adapters, or the documented unattended terminal outcome for browser-driven trips it can't re-price), while `/scrape` simply loses the Playwright opt-in and keeps using `claude-in-chrome` — still a browser path, and its default either way.
+- **Node.js (`npx`)**, so Claude Code can start the two Playwright MCP servers declared in this repo's tracked `.mcp.json` (see `ARCHI.md` §7 for both servers' config and the headed-debugging recipe). The headless one is what lets `/watch` re-check browser-driven trips unattended, and it's the driver `/scrape` can opt into as well; without Node, `.mcp.json` fails to start: `/watch` falls back to its non-browser paths (adapters, or the documented unattended terminal outcome for browser-driven trips it can't re-price), while `/scrape` simply loses the Playwright opt-in and keeps using `claude-in-chrome` — still a browser path, and its default either way.
 
 ## Quick start
 
@@ -108,7 +108,7 @@ Trips from the browser-driven trivago, momondo, and booking sources are re-check
 ```
 ai-holiday-search/
 ├── CLAUDE.md                            # Framework/workflow rules only (no personal data)
-├── .mcp.json                            # Playwright MCP browser driver (pinned, unattended-capable)
+├── .mcp.json                            # Two Playwright MCP servers: headless (unattended-capable) + headed (debugging)
 ├── .claude/
 │   ├── commands/
 │   │   ├── setup.md                     # /setup onboarding (documents, paste, or interview)

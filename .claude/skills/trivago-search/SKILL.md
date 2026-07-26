@@ -55,19 +55,9 @@ booking-search) commit to under "Limits and etiquette".
 **Why `--headless --isolated`:**
 
 - `--headless`: a scheduled/cron run has no display; a headed browser cannot start there. This
-  flag is what makes the scheduling claim above actually true. The tracked `.mcp.json` stays
-  headless for everyone who forks this repo — it is not something a user should edit locally
-  (that would produce a permanent, spurious diff). A user who wants a headed Playwright browser
-  for attended debugging instead adds a **second, user-scoped** MCP server that isn't tracked,
-  e.g.:
-
-  ```
-  claude mcp add playwright-headed -- npx -y @playwright/mcp@0.0.78 --isolated
-  ```
-
-  This registers a second server (no `--headless`) in the user's own config, leaving the
-  repo's `.mcp.json` untouched. Point the driver at it for a debugging session, then go back to
-  the default `playwright` server for normal use.
+  flag is what makes the scheduling claim above actually true. The tracked `.mcp.json` also
+  declares a second, headed `playwright-headed` server for attended debugging — see `ARCHI.md`
+  §7 for the recipe and both servers' config; this file only needs the hazard note that follows.
 - `--isolated`: a fresh profile per run, no persisted cookies or login state. This side-steps
   the privacy hazard in step 3 below (the homepage prefills the user's previous search and
   shows their recently-viewed properties) — an isolated context has no such history to leak.
@@ -114,11 +104,10 @@ already in hand (see "Fast path" below).
    match isn't unambiguous from the traveler's request, ask the user rather than guessing —
    **attended-only**: unattended, an ambiguous destination cannot be resolved this way, and
    takes the unattended terminal outcome above unless a known `locationId` is already in hand.
-   Once
-   resolved, record the destination's `locationId` (see URL grammar below) for the remainder of
-   this run, so any additional destinations already resolved this run can use the fast path
-   below instead of repeating disambiguation. This is in-conversation only — still no writing to
-   `profile/`.
+   Once resolved, record the destination's `locationId` (see URL grammar below) for the
+   remainder of this run, so any additional destinations already resolved this run can use the
+   fast path below instead of repeating disambiguation. This is in-conversation only — still no
+   writing to `profile/`.
 5. Selecting the destination auto-opens the date picker (two months shown side by side, `<`/`>`
    to page). Click the check-in day, then the check-out day.
 6. That auto-opens the Guests and rooms panel: Adults / Children / Rooms steppers and a "Pet
@@ -224,9 +213,11 @@ None of these steps may error out a `/scrape` run — always degrade to the next
 
 Any of these conditions ends the browser attempt and drops straight to the web-search fallback:
 
-1. Extension not connected, or `tabs_context_mcp` shows no usable tab. Checked once per run,
-   not per destination.
-2. Site permission for trivago.dk denied in the extension. Also checked once per run.
+1. The driver is unavailable per its own readiness check, checked once per run, not per
+   destination — for `claude-in-chrome`, the extension not connected or `tabs_context_mcp`
+   showing no usable tab; for the Playwright MCP server, it not being connected.
+2. Site permission for trivago.dk denied in the extension (`claude-in-chrome` only; the
+   Playwright MCP server has no equivalent per-site permission step). Also checked once per run.
 3. Bot challenge detected on the loaded page — stop navigating that page immediately.
 4. Page unreadable (both `find` and `read_page` fail, or 2-3 consecutive tool failures).
 5. Zero results for the given params.

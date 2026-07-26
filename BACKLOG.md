@@ -157,38 +157,28 @@ and the README said `/watch` can be scheduled via cron or CI — but the
 `claude-in-chrome` driver needs an attended session with site permission, so it
 cannot run on a schedule at all. The two statements contradicted each other.
 
-Resolved by taking the first of the three options below: a second driver,
-Playwright MCP, was added as an unattended-capable substitute. Either driver
-(`claude-in-chrome` or Playwright MCP) can now execute any of the three
-browser-driven procedures; `/watch` defaults to Playwright MCP because it is
-the only one of the two that can run without an attended session, and
-`/scrape` keeps `claude-in-chrome` as its default with Playwright available as
-an opt-in. The capability mapping and the two-driver model live once in
-`.claude/skills/trivago-search/SKILL.md`, referenced by `momondo-search` and
-`booking-search` rather than restated. The options that were considered and
-not chosen:
+Resolved by adding a second driver, Playwright MCP, as an unattended-capable
+substitute — this is what closes the contradiction between "`/watch` can run
+unattended" and "`claude-in-chrome` needs an attended session." Why: it lets
+either driver run all three browser-driven procedures, so scheduling no
+longer requires giving up the browser-driven sources. The current
+default-per-caller mapping and full capability model are authoritative in
+`.claude/skills/trivago-search/SKILL.md` ("Driver model") — do not re-narrate
+them here; that file is the one to check if defaults or capabilities ever
+change.
+
+Considered and not chosen:
 
 - Degrade browser-driven trips to Claude web search on re-check, and say plainly
   in the report that the price came from a weaker source than the original
   snapshot.
 - Refuse `/watch add` for browser-driven candidates and say why.
 
-`price-watch/SKILL.md`, `.claude/commands/watch.md`, and the README now agree
-with each other — the old contradiction between "safe to run unattended" and
-"the driver needs an attended session" is gone. What they agree on: scheduling
-browser-driven re-checks is now technically possible via the Playwright
-driver, but it remains unproven — every one of the three files still caveats
-it as not yet exercised end-to-end.
-
-Still open, and deliberately not overclaimed:
-
-- The unattended **scheduled** mode itself (cron, CI, or a recurring Claude
-  Code task) has not been exercised end-to-end — nor has the manual,
-  on-demand path; neither has been run against the real sites yet.
-- The live attended walkthrough (a `/scrape` run with the Playwright driver
-  selected, followed by a `/watch` re-check of a saved browser-driven trip,
-  performed once against the real sites) has not been performed. No capture
-  date for it exists yet.
+Still open, and deliberately not overclaimed: neither a scheduled/unattended
+run nor a manual attended walkthrough (a `/scrape` run with the Playwright
+driver selected, followed by a `/watch` re-check of a saved browser-driven
+trip) has been performed against the real sites yet. No capture date for
+either exists.
 
 ### 11. Nothing verifies a browser-driven source
 
@@ -240,6 +230,31 @@ evidence.
 Each skill records the date its facts were captured (all three 2026-07-25) —
 that date is the closest thing to a freshness signal this repo has, and a
 re-verification pass should update it.
+
+### 12. Two accepted-for-now design debts from the browser-driven /watch work
+
+Not bugs — deliberate calls, recorded so they aren't rediscovered as if new.
+
+**Trip-kind dispatch is enumerated in three places.** `price-watch/SKILL.md`,
+`.claude/commands/watch.md`, and `trip-scraper/SKILL.md` each spell out the
+six source names when dispatching on trip/candidate kind. A fourth
+browser-driven source means editing all three. The deeper fix is a
+`kind: adapter | browser | pasted` property declared per source skill and
+carried in the candidate record next to `source`, so dispatch reads the
+property instead of naming sources. This is consistent with the shape
+`trip-scraper` already uses ("Today that is…" kind reasoning), so the current
+enumeration is acceptable now and worth replacing when a fourth
+browser-driven source appears.
+
+**`profile/tooling.md` puts runtime tool selection inside a gitignored
+traveler-preference directory.** That's why the "absence means the caller
+default" rule needs restating defensively in `/scrape`, `/watch`, and the
+skills they call. `.mcp.json` / `.claude/settings.json` is arguably the more
+natural home for a tooling knob like this. Keeping it under `profile/` was a
+deliberate choice — it keeps the knob out of the six travel-preference files
+and out of anything that could be mistaken for shared framework config — and
+its cost is documentation drift (the absence rule stated in more than one
+place), not breakage.
 
 ## Features
 
