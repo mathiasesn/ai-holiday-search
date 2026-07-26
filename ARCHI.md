@@ -1,7 +1,7 @@
 # AI Holiday Search — Architecture Documentation
 
-> Generated: 2026-07-26 · Commit: 1c464c3 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
-> Last architecture change: `1c464c3` — Playwright MCP added as a second, unattended-capable browser driver, with its trivago bot-block fix (tracked `.mcp.json`, `profile/tooling.md` driver preference, browser-driven `/watch` re-check branch)
+> Generated: 2026-07-26 · Commit: 855b5d8 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
+> Last architecture change: `855b5d8` — Playwright MCP added as a second, unattended-capable browser driver, with its trivago bot-block fix (tracked `.mcp.json`, `profile/tooling.md` driver preference, browser-driven `/watch` re-check branch)
 > Re-read this file at the start of any session touching this codebase. Update it when the architecture changes (new major dependency, restructured layer, changed convention).
 
 ---
@@ -333,7 +333,7 @@ Three of these encode hard numbers worth knowing:
 Both are versioned with `schema_version: 1` and are defined authoritatively in their skill files.
 
 - **`trip_scraper/seen.json`** — `{schema_version, entries}` keyed by `sha256(f"{source}|{destination_slug}|{depart_date}|{return_date}|{price_bucket}")`, where `price_bucket` is the price floored to the nearest 50 so minor fare noise doesn't create false-new entries. `first_seen` is written once; `last_seen` updates every sighting. A candidate is dropped as a duplicate only if the key exists **and** the price hasn't moved buckets — a bucket change is a legitimate price-change re-surface.
-- **`watchlist/<slug>.json`** — slug is `{destination-slug}-{depart}-{return}`, with a source tag appended on collision. `original_snapshot` is written once at `/watch add` and **never modified**; `price_history` is append-only, one entry per re-check. Comparison is against the **most recent** entry, not the original. Thresholds: ≥5% down = drop, ≥5% up = rise, within ±5% = unchanged (still recorded), no matching listing = `available: false` + sold-out warning (keep watching; never auto-remove).
+- **`watchlist/<slug>.json`** — slug is `{destination-slug}-{depart}-{return}`, with a source tag appended on collision. `original_snapshot` is written once at `/watch add` and **never modified**; `price_history` is append-only, one entry per re-check. Comparison is against the most recent **verified** entry (walking back past any `available: null` entry), not the original. Thresholds: ≥5% down = drop, ≥5% up = rise, within ±5% = unchanged (still recorded), no matching listing = `available: false` + sold-out warning (keep watching; never auto-remove). A read that could not be completed at all is distinct from either: `available: null` plus an `unverified_reason`, reported as a blocked read and never as sold-out.
 
 ---
 

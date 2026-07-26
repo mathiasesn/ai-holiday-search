@@ -20,6 +20,13 @@ This guide covers getting a fresh fork of **ai-holiday-search** running end to e
   usable API. They need no credentials and never log in, book, or pay. You will be asked
   to grant per-site permission the first time. Without the extension, `/scrape` falls back
   to web search.
+- **Node.js (`npx`)** — lets Claude Code start the two Playwright MCP servers declared in
+  this repo's tracked `.mcp.json`. The headless one is the second way to reach the same
+  three browser-driven sources, and the only way to reach them *unattended*, so it is what
+  makes a scheduled `/watch` cover them (§7). `/scrape` can opt into it too, though it
+  defaults to the Chrome extension. Without Node the servers fail to start and both
+  commands fall back to their non-browser paths — nothing breaks. `ARCHI.md` §7 documents
+  both servers' arguments and the headed-debugging recipe.
 
 Nothing else is required. Everything degrades gracefully to web search + paste-a-listing
 if you skip the optional API keys and the extension.
@@ -154,10 +161,17 @@ it manually, or schedule it:
 - **Claude Code recurring task** — if your Claude Code setup supports scheduled/looping
   invocations, point it at `/watch` on your preferred interval.
 
-Scheduling only covers trips found through the API adapters. Trips that came from
-`trivago-search`, `momondo-search`, or `booking-search` cannot be re-checked unattended,
-because those sources need an attended browser session with site permission — an
-unresolved gap tracked as [BACKLOG.md](BACKLOG.md) item 10.
+Scheduling covers browser-driven trips too, not just the API adapters. `/watch` re-checks
+`trivago-search`, `momondo-search`, and `booking-search` trips through the headless
+Playwright MCP server in `.mcp.json`, which needs no attended session and no site
+permission. Confirmed on 2026-07-26 by an on-demand run that read a live trivago price
+headlessly; the *scheduled* path itself (cron, CI, recurring task) has not been exercised
+yet — see [BACKLOG.md](BACKLOG.md) item 10.
+
+Two things to expect from unattended browser reads. Sites can block them: trivago rejects
+headless Chrome's default User-Agent, which is why the tracked `.mcp.json` overrides it.
+And a blocked or challenged read is recorded as *could not verify*, reported separately
+from a sold-out warning, and never overwrites the last known good price.
 
 ## Troubleshooting
 
