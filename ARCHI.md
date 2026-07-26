@@ -1,7 +1,7 @@
 # AI Holiday Search — Architecture Documentation
 
-> Generated: 2026-07-26 · Commit: e3c3693 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
-> Last architecture change: `e3c3693` — Playwright MCP added as a second, unattended-capable browser driver (tracked `.mcp.json`, `profile/tooling.md` driver preference, browser-driven `/watch` re-check branch)
+> Generated: 2026-07-26 · Commit: 1c464c3 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
+> Last architecture change: `1c464c3` — Playwright MCP added as a second, unattended-capable browser driver, with its trivago bot-block fix (tracked `.mcp.json`, `profile/tooling.md` driver preference, browser-driven `/watch` re-check branch)
 > Re-read this file at the start of any session touching this codebase. Update it when the architecture changes (new major dependency, restructured layer, changed convention).
 
 ---
