@@ -213,6 +213,13 @@ Still open:
   whatever Chromium `@playwright/mcp` ships. It only has to avoid saying
   `Headless`, so drift degrades slowly rather than breaking — but it is one
   more pinned string, related to item 6.
+- The same UA hardcodes the platform of the machine it was written on
+  (`X11; Linux x86_64`), so a forker on macOS or Windows advertises Linux. This
+  is a wart, not a bug, and is **not** worth platform detection: the block was
+  triggered by the `Headless` token alone, and any ordinary UA clears it. Noted
+  so the platform string is not mistaken for a deliberate choice — a WAF that
+  cross-checks the UA against other fingerprint signals could flag the mismatch
+  where a matching UA would pass.
 - `playwright-headed` is declared in `.mcp.json` but did not connect during the
   walkthrough, so the attended-debugging path remains unexercised.
 
