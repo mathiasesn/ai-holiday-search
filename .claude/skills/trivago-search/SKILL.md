@@ -31,8 +31,11 @@ drivers: after 2-3 consecutive tool failures on any step, stop retrying and drop
 fallback chain below (see there for the full trigger list).
 
 The Playwright MCP server is declared in the repo's tracked `.mcp.json` as
-`npx -y @playwright/mcp@0.0.78 --headless --isolated`. Tool names below were confirmed live in
-a connected session on 2026-07-26.
+`npx -y @playwright/mcp@0.0.78 --headless --isolated`. The tool names below were confirmed
+present in a connected Playwright MCP session on 2026-07-26 — that confirms the tools exist and
+are callable, not that a real site was read through them; the live walkthrough against
+trivago.dk itself is still pending (see "Unattended terminal outcome" below and `BACKLOG.md`
+item 11).
 
 | Capability | `claude-in-chrome` tool | Playwright MCP tool |
 |---|---|---|
@@ -52,8 +55,19 @@ booking-search) commit to under "Limits and etiquette".
 **Why `--headless --isolated`:**
 
 - `--headless`: a scheduled/cron run has no display; a headed browser cannot start there. This
-  flag is what makes the scheduling claim above actually true. A user debugging the Playwright
-  path attended can drop the flag locally.
+  flag is what makes the scheduling claim above actually true. The tracked `.mcp.json` stays
+  headless for everyone who forks this repo — it is not something a user should edit locally
+  (that would produce a permanent, spurious diff). A user who wants a headed Playwright browser
+  for attended debugging instead adds a **second, user-scoped** MCP server that isn't tracked,
+  e.g.:
+
+  ```
+  claude mcp add playwright-headed -- npx -y @playwright/mcp@0.0.78 --isolated
+  ```
+
+  This registers a second server (no `--headless`) in the user's own config, leaving the
+  repo's `.mcp.json` untouched. Point the driver at it for a debugging session, then go back to
+  the default `playwright` server for normal use.
 - `--isolated`: a fresh profile per run, no persisted cookies or login state. This side-steps
   the privacy hazard in step 3 below (the homepage prefills the user's previous search and
   shows their recently-viewed properties) — an isolated context has no such history to leak.
@@ -63,23 +77,14 @@ booking-search) commit to under "Limits and etiquette".
 ### Unattended terminal outcome
 
 Under an unattended re-check (Playwright MCP, driven by `/watch`) there is no user to answer a
-bot challenge, consent wall, or disambiguation prompt. The attended tail of the fallback
-chain below — step 7 ("ask the user to paste listing text") and the disambiguation step 4
-("ask the user rather than guessing") — is unavailable. So, unattended:
-
-- Try the Playwright browser read. On any chain-ending condition (see "Fallback chain" below),
-  fall through to Claude web search exactly as the attended chain does.
-- If web search also yields nothing, the entry is terminal: append a `price_history` entry
-  with `available: false`.
-- The **reason** (bot challenge / consent wall / zero results / unreadable page / ambiguous
-  destination) goes in the run's report text, NOT in the JSON — `watchlist/<slug>.json` stays
-  at `schema_version: 1` and the entry shape is unchanged. Entries do not record which driver
-  produced them.
-- Report such an entry **distinctly from a genuine sold-out**. A blocked read is not evidence a
-  trip is unavailable, and a run that marks everything unavailable must not look like mass
-  sold-out.
-- An ambiguous destination with no known `locationId` in hand cannot be resolved unattended —
-  it takes this terminal outcome rather than guessing among the candidates.
+bot challenge, consent wall, or disambiguation prompt, so the attended tail of the fallback
+chain below — step 7 and the disambiguation step 4 — is unavailable. The authoritative
+definition of the resulting terminal outcome (fall through to web search, then
+`available: false` with the reason in the report text only, reported distinctly from a genuine
+sold-out) lives in `.claude/skills/price-watch/SKILL.md`'s re-check procedure — this skill
+follows it rather than restating it. One trivago-specific note: an ambiguous destination with
+no known `locationId` in hand cannot be resolved unattended and takes that same terminal outcome
+rather than guessing among the candidates.
 
 ## Locating a results page
 

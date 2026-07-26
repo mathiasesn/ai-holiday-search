@@ -60,8 +60,9 @@ capability), the `--headless --isolated` rationale, the never-use rule for `brow
 `.claude/skills/trivago-search/SKILL.md` ("Driver model"); this skill does not restate it. Either
 driver can run this skill's stays/flights procedures unchanged. This skill's own attended-only
 fallback step is step 7 below ("ask the user to paste listing text"); unattended, the substitute
-is trivago-search's unattended terminal outcome (fall through to web search, then mark the entry
-terminal with `available: false` and report the reason in text, not JSON).
+is the unattended terminal outcome authoritatively defined in
+`.claude/skills/price-watch/SKILL.md`'s "Re-check procedure" (fall through to web search, then
+mark the entry terminal with `available: false` and report the reason in text, not JSON).
 
 ## Privacy hazard — read before driving any form
 

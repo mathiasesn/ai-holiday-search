@@ -1,7 +1,7 @@
 # AI Holiday Search — Architecture Documentation
 
-> Generated: 2026-07-25 · Commit: eb09951 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
-> Last architecture change: `a126743` — `booking-search` added as a third browser-driven source (stays + flights; no packages vertical)
+> Generated: 2026-07-26 · Commit: e3c3693 · Version: 0.1.0 (from `pyproject.toml`; no git tags exist)
+> Last architecture change: `e3c3693` — Playwright MCP added as a second, unattended-capable browser driver (tracked `.mcp.json`, `profile/tooling.md` driver preference, browser-driven `/watch` re-check branch)
 > Re-read this file at the start of any session touching this codebase. Update it when the architecture changes (new major dependency, restructured layer, changed convention).
 
 ---
@@ -41,7 +41,7 @@ A defining constraint: **every external-data path degrades gracefully.** No adap
 | Python | `>=3.10` (`pyproject.toml`), pinned to `3.12` for dev (`.python-version`) | CI matrixes 3.10 and 3.12 for adapters only |
 | Package/env manager | **uv** | Sole supported path; `[tool.uv] package = false` (this is not an installable package) |
 | Lockfile | `uv.lock` (committed) | Covers `tools/` + project deps, **not** the adapters — see §8 |
-| Runtime dependency | `requests` | The only third-party dependency, used solely by the adapters |
+| Runtime dependency | `requests` | The only third-party **Python** dependency, used solely by the adapters. Node/`npx` + `@playwright/mcp@0.0.78` is a separate, non-Python runtime prerequisite for the `/watch` browser path (and the `/scrape` Playwright opt-in) — see the row below |
 | Tooling dependencies | none | `tools/*.py` are stdlib-only by design, including a hand-rolled YAML-frontmatter parser |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) | 3 jobs; `astral-sh/setup-uv@v5` |
 | Host agent | Claude Code | Commands, skills, and subagent (`Task`/`Agent`) spawning |
@@ -66,6 +66,7 @@ ai-holiday-search/
 ├── uv.lock                         # Committed lock for the project env (NOT the adapters)
 ├── .python-version                 # 3.12 — dev pin uv provisions
 ├── .gitignore                      # Encodes the personal-data boundary (see §9)
+├── .mcp.json                       # Tracked MCP config: declares the headless Playwright server (§7)
 ├── trip_tracker.csv.example        # Header-only template; /setup copies it to gitignored trip_tracker.csv
 │
 ├── .claude/                        # Claude Code layer (host-specific)
@@ -154,7 +155,7 @@ No tests exist. `BACKLOG.md` item 1 explains why that is the highest-priority ga
 
 ## 7. Configuration
 
-All configuration is environment variables; there is no config file for runtime behavior. Every variable is **optional** — unset means the adapter takes its documented fallback path.
+Adapter configuration is environment variables; there is no adapter-specific config file. Every variable is **optional** — unset means the adapter takes its documented fallback path. The one exception is MCP server configuration: tracked `.mcp.json` at the repo root declares the Playwright MCP server (`npx -y @playwright/mcp@0.0.78 --headless --isolated`) that the `/watch` browser path (and the `/scrape` Playwright opt-in) depend on — see §3.
 
 | Variable | Used by | Effect when unset |
 |---|---|---|
@@ -229,7 +230,7 @@ This is **distinct from** the "normalized candidate record" that `trip-scraper` 
 
 The repo is split into **tracked framework content** and **untracked personal data**, and this split is enforced by tooling, not trust.
 
-**Tracked (safe to commit):** `CLAUDE.md`, `ARCHI.md`, `README.md`, `SETUP.md`, `BACKLOG.md`, everything under `.claude/commands/`, `.claude/skills/`, `.agents/skills/`, `tools/`, `.github/`, `pyproject.toml`, `uv.lock`, `trip_tracker.csv.example`, and the `.gitkeep` / `documents/README.md` scaffolding placeholders.
+**Tracked (safe to commit):** `CLAUDE.md`, `ARCHI.md`, `README.md`, `SETUP.md`, `BACKLOG.md`, everything under `.claude/commands/`, `.claude/skills/`, `.agents/skills/`, `tools/`, `.github/`, `pyproject.toml`, `uv.lock`, `.mcp.json`, `trip_tracker.csv.example`, and the `.gitkeep` / `documents/README.md` scaffolding placeholders.
 
 **Gitignored (never commit):** `profile/`, `itineraries/*`, `watchlist/*`, `trip_scraper/*`, `trip_tracker.csv`, the contents of `documents/past-trips/` and `documents/preferences/`, `.env`, `*.key`, and `specs/` (via its own `.gitignore` containing `*`).
 
@@ -296,7 +297,7 @@ Commands are procedure; skills are reference. A command file states its inputs, 
 | `/setup` | `documents/`, `$ARGUMENTS`, holiday-planner templates | `profile/01…06-*.md`, `profile/tooling.md`, `trip_tracker.csv` | 3 modes (documents / pasted text / interview), auto-detected; asks rather than picking silently; documents-mode is idempotent and merges; seeds `tooling.md` with caller defaults and asks before overwriting an existing one |
 | `/scrape` | `profile/`, `profile/tooling.md` (optional, driver preference), `search-queries.md`, adapters, `trivago-search/SKILL.md`, `momondo-search/SKILL.md`, `booking-search/SKILL.md`, `trip_scraper/seen.json` | `trip_scraper/seen.json` | Fan out (including browser-driven `trivago-search`, `momondo-search`, and `booking-search` runs via `claude-in-chrome` or Playwright MCP tools, per `tooling.md`, both in its `allowed-tools`; `momondo-search` and `booking-search` each cover whichever of their verticals the run calls for) → normalize → dedupe → score → present sorted by fit with per-criterion reasoning |
 | `/plan` | `profile/`, holiday-planner 03/04/05 | `itineraries/<trip-slug>/itinerary.md` | 7 explicit steps, see below |
-| `/watch` | `watchlist/*.json`, adapters | `watchlist/<slug>.json` | `add` / `remove` / no-args re-check |
+| `/watch` | `watchlist/*.json`, `profile/tooling.md` (optional, driver preference), adapters, `trivago-search/SKILL.md`, `momondo-search/SKILL.md`, `booking-search/SKILL.md` | `watchlist/<slug>.json` | `add` / `remove` / no-args re-check; dispatches on trip kind — adapter-backed, pasted, or browser-driven (using the unattended Playwright MCP driver by default, per `tooling.md`) |
 | `/reset` | — | deletes `profile/`, `watchlist/`, `trip_tracker.csv` | Requires typing `RESET`; touches only gitignored state |
 
 ### The `/plan` pipeline

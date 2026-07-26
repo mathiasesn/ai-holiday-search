@@ -64,7 +64,7 @@ separate from the six numbered traveler-preference files and never merged into t
      - If `profile/tooling.md` does not exist, write it with the caller defaults: `/scrape` → `claude-in-chrome`, `/watch` → Playwright MCP.
      - If it already exists, treat this the same as an existing filled profile elsewhere in this flow: do not clobber it silently. Tell the user it already has driver preferences set and ask whether to keep it as-is or reset it to the caller defaults.
 
-7. **State the privacy boundary.** Tell the user explicitly: `profile/` (including `tooling.md`) and `trip_tracker.csv` are gitignored, contain their personal data, and must never be committed to the fork. If they intend to share the repo or open a PR, these files stay local.
+7. **State the privacy boundary.** Tell the user explicitly: `profile/` and `trip_tracker.csv` are gitignored and must never be committed to the fork. `profile/01…06-*.md` hold their personal travel data; `profile/tooling.md` holds no travel data at all — it's a local tooling knob (which MCP driver runs browser reads) — but it lives in the same gitignored `profile/` folder and stays local for the same reason: nothing under `profile/` should end up in a shared fork or PR.
 
 8. **Echo a summary for confirmation.** Print a short recap of the captured profile — group composition, home airports, budget range, style, top dealbreakers, and 2-3 history highlights with their stated opinions — and ask the user to confirm it's accurate or point out corrections. Do not treat the profile as final until confirmed; re-write the affected file(s) if the user corrects something.
 

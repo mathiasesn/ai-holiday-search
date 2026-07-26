@@ -173,8 +173,12 @@ not chosen:
   snapshot.
 - Refuse `/watch add` for browser-driven candidates and say why.
 
-`price-watch/SKILL.md`, `.claude/commands/watch.md`, and the README now agree:
-scheduling browser-driven re-checks is real, not caveated.
+`price-watch/SKILL.md`, `.claude/commands/watch.md`, and the README now agree
+with each other — the old contradiction between "safe to run unattended" and
+"the driver needs an attended session" is gone. What they agree on: scheduling
+browser-driven re-checks is now technically possible via the Playwright
+driver, but it remains unproven — every one of the three files still caveats
+it as not yet exercised end-to-end.
 
 Still open, and deliberately not overclaimed:
 
