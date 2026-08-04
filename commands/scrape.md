@@ -23,6 +23,14 @@ never hardcode a repo-relative path:
 Always report a path under `DATA_ROOT` to the user as an absolute path, since in plugin
 mode it lies outside the current project.
 
+**Fallback if `${CLAUDE_PLUGIN_ROOT}` fails to resolve.** If a path containing
+`${CLAUDE_PLUGIN_ROOT}` does not actually resolve (the variable was not interpolated), do not
+silently fall back to the current working directory. Instead, determine `FRAMEWORK_ROOT` by
+locating the directory that contains both `ARCHI.md` and `.agents/skills/` (this will be either
+the installed plugin directory or this repo's root). If that directory cannot be found either,
+tell the user the framework root could not be resolved and stop — do not read or write any tree
+under a guessed root.
+
 ## Purpose
 Search configured sources for trips matching the traveler profile and the current date window,
 deduplicate against previously seen results, score every candidate for fit, and present matches
@@ -105,6 +113,12 @@ sorted by fit score so the user can pick one for `/plan` or `/watch add`.
    - `/watch add <pick>` to save it to the price-tracking watchlist.
 
 9. **Persist state.** Write the full set of new candidates (scored) to a `<DATA_ROOT>/trip_scraper/` results snapshot. Update `<DATA_ROOT>/trip_scraper/seen.json` per `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md`'s format: for each candidate seen this run (new, price-changed, or repeat), set/update its `last_seen` to this run's timestamp — set `first_seen` only when the entry didn't exist before, and never overwrite an existing `first_seen`. Add new entries and update existing ones; keep `schema_version` set.
+
+## Notes on uncertainty
+Prices, availability, and opening hours are frequently not confirmed by a live authoritative
+source (API responses that are cached/stale, web-search results, or a browser read that got
+partial data). Any such figure must be labeled as an estimate to verify at booking — never
+present a guess as a confirmed fact.
 
 ## Output
 A fit-sorted list of new trip candidates with price/person and scoring reasoning, plus updated `<DATA_ROOT>/trip_scraper/` state.

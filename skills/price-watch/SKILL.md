@@ -152,5 +152,5 @@ Delete `<DATA_ROOT>/watchlist/<slug>.json`. Confirm the slug and destination wit
 Playwright MCP is `/watch`'s default driver because it is the only one of the two that can run
 unattended — `claude-in-chrome` needs an attended session and per-site extension permission, so
 it cannot execute on a schedule. Scheduled/cron runs require the headless server already declared
-in the repo's tracked `.mcp.json` (see `ARCHI.md` §7 for its argument list); a headed browser
+in the tracked `<FRAMEWORK_ROOT>/.mcp.json` (see `<FRAMEWORK_ROOT>/ARCHI.md` §7 for its argument list); a headed browser
 cannot start where there is no display.

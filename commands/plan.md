@@ -23,6 +23,14 @@ never hardcode a repo-relative path:
 Always report a path under `DATA_ROOT` to the user as an absolute path, since in plugin
 mode it lies outside the current project.
 
+**Fallback if `${CLAUDE_PLUGIN_ROOT}` fails to resolve.** If a path containing
+`${CLAUDE_PLUGIN_ROOT}` does not actually resolve (the variable was not interpolated), do not
+silently fall back to the current working directory. Instead, determine `FRAMEWORK_ROOT` by
+locating the directory that contains both `ARCHI.md` and `.agents/skills/` (this will be either
+the installed plugin directory or this repo's root). If that directory cannot be found either,
+tell the user the framework root could not be resolved and stop — do not read or write any tree
+under a guessed root.
+
 ## Purpose
 Turn a destination request or a pasted listing/package/booking-page text into a fully verified,
 day-by-day Markdown itinerary with a budget table, produced by a drafter agent and independently

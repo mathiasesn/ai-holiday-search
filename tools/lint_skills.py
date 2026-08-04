@@ -78,6 +78,9 @@ def find_files(patterns_root, filename):
     return results
 
 
+EXPECTED_COMMAND_NAMES = ("setup", "scrape", "plan", "watch", "reset")
+
+
 def find_command_files(commands_dir):
     if not os.path.isdir(commands_dir) or os.path.islink(commands_dir):
         return []
@@ -86,6 +89,20 @@ def find_command_files(commands_dir):
         for name in sorted(os.listdir(commands_dir))
         if name.endswith(".md")
     ]
+
+
+def find_all_markdown(root_dir):
+    """Yield every `.md` file under root_dir, any depth, pruning symlinked
+    subdirectories (same rationale as find_files)."""
+    results = []
+    if not os.path.isdir(root_dir):
+        return results
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
+        for name in filenames:
+            if name.endswith(".md"):
+                results.append(os.path.join(dirpath, name))
+    return results
 
 
 def parse_frontmatter(path, errors):
@@ -244,6 +261,53 @@ def check_links(path, body, errors):
                 errors.append(f"{rel}: backticked repo-relative path does not exist: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
 
 
+EXPECTED_AGENTS_SKILLS = ("flights-search", "stays-search", "packages-search")
+
+
+def check_discovery_completeness(command_files, skill_files, agents_skills_dir, errors):
+    """Assert the file sets the rest of this script iterates are actually
+    populated and complete, so a renamed/missing directory produces a loud
+    failure instead of every downstream check silently no-oping over an
+    empty list (the vacuous-pass class of bug this script used to have)."""
+    found_command_names = {
+        os.path.splitext(os.path.basename(p))[0] for p in command_files
+    }
+    missing_commands = [n for n in EXPECTED_COMMAND_NAMES if n not in found_command_names]
+    if missing_commands:
+        errors.append(
+            f"commands/: missing expected command file(s): "
+            f"{', '.join(sorted(n + '.md' for n in missing_commands))} "
+            f"(found {sorted(found_command_names) or 'none'} — is commands/ missing or renamed?)"
+        )
+    extra_commands = found_command_names - set(EXPECTED_COMMAND_NAMES)
+    if extra_commands:
+        errors.append(
+            f"commands/: unexpected command file(s) not in the known set "
+            f"{EXPECTED_COMMAND_NAMES}: {sorted(extra_commands)}"
+        )
+
+    if not skill_files:
+        errors.append(
+            "skills/: found zero SKILL.md files under skills/ "
+            "(expected at least one — is skills/ missing or renamed?)"
+        )
+
+    if not os.path.isdir(agents_skills_dir):
+        errors.append(f".agents/skills/: directory does not exist")
+    else:
+        found_adapters = {
+            name for name in os.listdir(agents_skills_dir)
+            if os.path.isdir(os.path.join(agents_skills_dir, name))
+        }
+        missing_adapters = [n for n in EXPECTED_AGENTS_SKILLS if n not in found_adapters]
+        if missing_adapters:
+            errors.append(
+                f".agents/skills/: missing expected adapter directory(ies): "
+                f"{', '.join(sorted(missing_adapters))} "
+                f"(found {sorted(found_adapters) or 'none'})"
+            )
+
+
 def check_agents_skills_structure(errors):
     agents_skills_dir = os.path.join(REPO_ROOT, ".agents", "skills")
     if not os.path.isdir(agents_skills_dir):
@@ -380,11 +444,23 @@ def extract_path_block(text):
     return block, idx, idx + len(block)
 
 
+# Substrings that must survive in the path-resolution block for it to still
+# express the essential contract — pins the block's *content*, not merely
+# its self-consistency across files. An edit that changes all five files
+# identically (e.g. quietly swapping the DATA_ROOT location) still fails
+# unless it happens to preserve every one of these tokens.
+REQUIRED_PATH_BLOCK_TOKENS = (
+    "${CLAUDE_PLUGIN_ROOT}",
+    "~/.ai-holiday-search",
+    "FRAMEWORK_ROOT",
+    "DATA_ROOT",
+)
+
+
 def check_path_resolution_block(command_files, errors):
     """All five commands/*.md must carry a byte-identical
-    '## Path resolution (framework root and data root)' block. Expected text
-    is derived from majority agreement among the files themselves (not
-    hardcoded), so an intentional edit applied to all five still passes."""
+    '## Path resolution (framework root and data root)' block, and that
+    block must still mention the essential contract tokens."""
     blocks = {}  # rel -> block text
     for path in command_files:
         rel = os.path.relpath(path, REPO_ROOT)
@@ -397,30 +473,61 @@ def check_path_resolution_block(command_files, errors):
         blocks[rel] = found[0]
 
     if not blocks:
+        errors.append(
+            f"commands/: no file carries a '{PATH_BLOCK_HEADER}' section to check "
+            f"(expected all of {EXPECTED_COMMAND_NAMES})"
+        )
         return
 
     counts = {}
     for rel, block in blocks.items():
         counts.setdefault(block, []).append(rel)
-    majority_block, majority_files = max(counts.items(), key=lambda kv: len(kv[1]))
 
     if len(counts) > 1:
-        for block, files in counts.items():
-            if block is majority_block:
-                continue
-            for rel in files:
-                errors.append(
-                    f"{rel}: '{PATH_BLOCK_HEADER}' block differs from the other "
-                    f"{len(majority_files)} command file(s) (byte-for-byte mismatch)"
-                )
+        # No majority vote: disagreement is reported as disagreement, not
+        # attributed to whichever variant happens to be less common.
+        summary = "; ".join(
+            f"{', '.join(sorted(files))} agree with each other" for files in counts.values()
+        )
+        for rel in sorted(blocks):
+            errors.append(
+                f"{rel}: '{PATH_BLOCK_HEADER}' block is not byte-identical across all "
+                f"command files — groups found: {summary}"
+            )
+        return
+
+    # All blocks agree with each other — now pin the content itself.
+    ((only_block, only_files),) = counts.items()
+    missing_tokens = [t for t in REQUIRED_PATH_BLOCK_TOKENS if t not in only_block]
+    if missing_tokens:
+        for rel in sorted(only_files):
+            errors.append(
+                f"{rel}: '{PATH_BLOCK_HEADER}' block is identical across command files but "
+                f"no longer mentions required token(s): {', '.join(missing_tokens)}"
+            )
 
 
 CLAUDE_DIR_RE = re.compile(r"\.claude/")
 SEARCH_PY_RE = re.compile(r"\.agents/skills/([^/\s`)]+)/search\.py")
 FRAMEWORK_ROOTED_SEARCH_PY_RE = re.compile(r"<FRAMEWORK_ROOT>/\.agents/skills/[^/\s`)]+/search\.py")
-BARE_PERSONAL_DIR_RE = re.compile(r"\b(?:profile|itineraries|watchlist|trip_scraper)/")
+BARE_PERSONAL_DIR_RE = re.compile(r"\b(profile|itineraries|watchlist|trip_scraper)/")
 BARE_TRIP_TRACKER_RE = re.compile(r"\btrip_tracker\.csv\b(?!\.example)")
-DATA_ROOT_TOKEN = "<DATA_ROOT>"
+# A <DATA_ROOT>/... or <FRAMEWORK_ROOT>/... span is already rooted — blank
+# out just that span (not the whole line) before scanning for bare personal
+# paths, so a rooted mention earlier in a line no longer exempts an
+# unrelated unrooted mention later on the same line.
+ROOTED_SPAN_RE = re.compile(r"<(?:DATA_ROOT|FRAMEWORK_ROOT)>/[\w./-]*")
+# An unrooted `skills/...` or `commands/...` reference to a concrete file
+# (ending .md/.py) is a runtime read target that should be rooted at
+# <FRAMEWORK_ROOT>, same class as the .agents/skills/*/search.py case.
+# Requiring a .md/.py suffix (rather than any skills/commands/ mention)
+# keeps this from flagging bare structural prose like "the `commands/`
+# directory" or glob notation like `skills/*/SKILL.md` (the `*` breaks the
+# [\w.-]+ segment match, so glob prose is left alone, same rationale as
+# LITERAL_PATH_RE elsewhere in this file).
+UNROOTED_SKILLS_OR_COMMANDS_RE = re.compile(
+    r"(?<![\w/.-])(?:skills|commands)/[\w.-]+(?:/[\w.-]+)*\.(?:md|py)\b"
+)
 
 
 def _mask(text, pattern):
@@ -444,19 +551,27 @@ def check_no_repo_relative_paths(md_files, path_blocks, errors):
     for commands/*.md, the canonical "## Path resolution" block (which
     legitimately lists all six as backticked prose) are blanked out — same
     line count, so remaining matches still report a useful line number —
-    before scanning. A line that already contains a `<DATA_ROOT>` token
-    elsewhere is skipped entirely for the bare-personal-path checks: this
-    repo's convention is to root the first mention on a line and then
-    repeat a bare filename/pattern afterwards for readability (e.g.
-    "Deletes: `<DATA_ROOT>/watchlist/` (all `watchlist/<slug>.json`
-    files)") — that repeat is not a reintroduced unrooted path, it is the
-    same, already-rooted one restated.
+    before scanning. Rather than a line-level exemption (which would let a
+    single unrelated `<DATA_ROOT>` mention anywhere on a line silence every
+    check for that whole line), only the exact `<DATA_ROOT>/xxx` or
+    `<FRAMEWORK_ROOT>/xxx` span is blanked, and a bare repeat of that SAME
+    `xxx` name later on the line is treated as the repo's documented
+    readability convention (root the first mention, then repeat a bare
+    filename for readability, e.g. "Deletes: `<DATA_ROOT>/watchlist/` (all
+    `watchlist/<slug>.json` files)") — a bare mention of a *different*
+    personal-data name on the same line is still flagged.
+
+    Also flags an unrooted `skills/...`/`commands/...` reference to a
+    concrete `.md`/`.py` file (the same unrooted-runtime-target class the
+    refactor left behind for `.agents/skills/*/search.py`).
 
     Known blind spot: this is a textual heuristic, not a parser — it cannot
     catch a repo-relative reference split across a line wrap, hidden behind
     an HTML entity, embedded in a fenced code block that itself pastes the
-    block/frontmatter, or a genuinely unrooted personal path that happens to
-    share a line with an unrelated `<DATA_ROOT>` mention.
+    block/frontmatter, or a genuinely unrooted personal/framework path that
+    happens to share a line with an unrelated rooted mention of the exact
+    same first path segment (a rare same-name collision, e.g. two different
+    `profile/...` targets on one line where only one is meant to be rooted).
     """
     for path in md_files:
         rel = os.path.relpath(path, REPO_ROOT)
@@ -478,19 +593,47 @@ def check_no_repo_relative_paths(md_files, path_blocks, errors):
         masked = _mask(text, FRAMEWORK_ROOTED_SEARCH_PY_RE)
 
         for line_no, line in enumerate(masked.splitlines(), start=1):
-            if CLAUDE_DIR_RE.search(line):
+            # Which directories/files were already rooted on THIS line via a
+            # <DATA_ROOT>/... or <FRAMEWORK_ROOT>/... span (first path
+            # segment after the token, e.g. "watchlist" from
+            # "<DATA_ROOT>/watchlist/", or ".claude" from
+            # "<FRAMEWORK_ROOT>/.claude/"). A bare repeat of that SAME name
+            # later in the line is the repo's documented readability
+            # convention ("<DATA_ROOT>/watchlist/` (all `watchlist/<slug>.json`
+            # files)") and must still pass — but a bare mention of a
+            # DIFFERENT personal-data name on the same line is a genuinely
+            # unrooted path and must still be flagged.
+            rooted_names_on_line = set()
+            for m in ROOTED_SPAN_RE.finditer(line):
+                remainder = m.group(0).split(">/", 1)[1]
+                first_seg = remainder.split("/", 1)[0]
+                if first_seg:
+                    rooted_names_on_line.add(first_seg)
+
+            # Blank out the rooted spans themselves (not the whole line) so
+            # e.g. the "watchlist/" inside "<DATA_ROOT>/watchlist/" (or the
+            # ".claude/" inside "<FRAMEWORK_ROOT>/.claude/") isn't
+            # double-counted as a second, bare match.
+            bare_scan_line = _mask(line, ROOTED_SPAN_RE)
+
+            if CLAUDE_DIR_RE.search(bare_scan_line):
                 errors.append(f"{rel}:{line_no}: repo-relative reference to '.claude/' — use <FRAMEWORK_ROOT> instead")
-            for m in SEARCH_PY_RE.finditer(line):
+            for m in SEARCH_PY_RE.finditer(bare_scan_line):
                 adapter_name = m.group(1)
                 if "*" in adapter_name:
                     continue  # glob prose (e.g. `.agents/skills/*/search.py`), not an invocation
                 errors.append(f"{rel}:{line_no}: '.agents/skills/{adapter_name}/search.py' invocation not rooted at <FRAMEWORK_ROOT>")
-            if DATA_ROOT_TOKEN in line:
-                continue
-            if BARE_PERSONAL_DIR_RE.search(line):
+            for m in BARE_PERSONAL_DIR_RE.finditer(bare_scan_line):
+                if m.group(1) in rooted_names_on_line:
+                    continue
                 errors.append(f"{rel}:{line_no}: unrooted personal-data path (should be <DATA_ROOT>/...): {line.strip()!r}")
-            if BARE_TRIP_TRACKER_RE.search(line):
+            if "trip_tracker.csv" not in rooted_names_on_line and BARE_TRIP_TRACKER_RE.search(bare_scan_line):
                 errors.append(f"{rel}:{line_no}: unrooted 'trip_tracker.csv' reference (should be <DATA_ROOT>/trip_tracker.csv): {line.strip()!r}")
+            for m in UNROOTED_SKILLS_OR_COMMANDS_RE.finditer(bare_scan_line):
+                errors.append(
+                    f"{rel}:{line_no}: unrooted framework-file reference '{m.group(0)}' "
+                    f"(should be <FRAMEWORK_ROOT>/{m.group(0)}): {line.strip()!r}"
+                )
 
 
 KEBAB_CASE_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -614,6 +757,131 @@ def check_symlink_integrity(errors):
         expected_resolved = os.path.realpath(os.path.join(REPO_ROOT, rel_target))
         if resolved != expected_resolved:
             errors.append(f"{rel_link}: resolves to {resolved!r}, expected {expected_resolved!r}")
+            continue
+        # os.path.realpath on a dangling symlink still returns the expected
+        # string (it does not require the target to exist), so a renamed-away
+        # commands/ or skills/ dir would otherwise pass silently. Require the
+        # resolved target to actually exist as a directory with content.
+        if not os.path.isdir(resolved):
+            errors.append(
+                f"{rel_link}: resolves to {resolved!r} but that path is not an existing "
+                f"directory (dangling symlink — is '{rel_target}' missing or renamed?)"
+            )
+            continue
+        if not os.listdir(resolved):
+            errors.append(f"{rel_link}: resolves to {resolved!r} but that directory is empty")
+
+
+PINNED_PLAYWRIGHT_MCP_RE = re.compile(r"^@playwright/mcp@(?!latest\b)\S+$")
+
+
+def check_mcp_consistency(errors):
+    """`.mcp.json` must define exactly `playwright` and `playwright-headed`,
+    both pinned to the identical `@playwright/mcp@<version>` package (no
+    `@latest`/unpinned form). If `.claude-plugin/plugin.json` also declares
+    `mcpServers`, it must either point at `./.mcp.json` or independently
+    declare the same two server names pinned to the same version, so the
+    two distribution modes cannot silently drift apart."""
+    mcp_path = os.path.join(REPO_ROOT, ".mcp.json")
+    plugin_path = os.path.join(REPO_ROOT, ".claude-plugin", "plugin.json")
+
+    if not os.path.isfile(mcp_path):
+        errors.append(".mcp.json: file does not exist")
+        return
+
+    with open(mcp_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    try:
+        mcp = json.loads(raw)
+    except json.JSONDecodeError as e:
+        errors.append(f".mcp.json: invalid JSON: {e}")
+        return
+
+    servers = mcp.get("mcpServers")
+    if not isinstance(servers, dict):
+        errors.append(".mcp.json: missing or non-object 'mcpServers'")
+        return
+
+    expected_names = {"playwright", "playwright-headed"}
+    found_names = set(servers.keys())
+    if found_names != expected_names:
+        errors.append(
+            f".mcp.json: 'mcpServers' keys {sorted(found_names)} do not match expected "
+            f"{sorted(expected_names)}"
+        )
+
+    def _pinned_arg(server_name, server_def):
+        args = server_def.get("args") if isinstance(server_def, dict) else None
+        if not isinstance(args, list):
+            errors.append(f".mcp.json: server '{server_name}' has no 'args' list")
+            return None
+        candidates = [a for a in args if isinstance(a, str) and a.startswith("@playwright/mcp")]
+        if len(candidates) != 1:
+            errors.append(
+                f".mcp.json: server '{server_name}' args do not contain exactly one "
+                f"'@playwright/mcp@<version>' entry: {candidates}"
+            )
+            return None
+        pin = candidates[0]
+        if not PINNED_PLAYWRIGHT_MCP_RE.match(pin):
+            errors.append(
+                f".mcp.json: server '{server_name}' uses unpinned/'@latest' playwright mcp "
+                f"version: '{pin}' — pin an exact version"
+            )
+            return None
+        return pin
+
+    pins = {}
+    for name in sorted(found_names & expected_names):
+        pin = _pinned_arg(name, servers[name])
+        if pin is not None:
+            pins[name] = pin
+
+    if len(set(pins.values())) > 1:
+        errors.append(
+            f".mcp.json: playwright mcp version pins differ across servers: "
+            f"{ {n: p for n, p in pins.items()} }"
+        )
+
+    mcp_version = next(iter(pins.values()), None)
+
+    if not os.path.isfile(plugin_path):
+        return
+    with open(plugin_path, "r", encoding="utf-8") as f:
+        try:
+            plugin = json.loads(f.read())
+        except json.JSONDecodeError:
+            return  # already reported by check_manifest_consistency
+
+    plugin_mcp = plugin.get("mcpServers")
+    if plugin_mcp is None:
+        return
+
+    if isinstance(plugin_mcp, str):
+        if plugin_mcp not in ("./.mcp.json", ".mcp.json"):
+            errors.append(
+                f"plugin.json: 'mcpServers' string {plugin_mcp!r} does not point at "
+                f"'./.mcp.json' — plugin mode would use a different MCP config than clone mode"
+            )
+        return
+
+    if isinstance(plugin_mcp, dict):
+        plugin_names = set(plugin_mcp.keys())
+        if plugin_names != expected_names:
+            errors.append(
+                f"plugin.json: 'mcpServers' keys {sorted(plugin_names)} do not match "
+                f".mcp.json's {sorted(expected_names)} — the two modes would drift apart"
+            )
+        for name in sorted(plugin_names & expected_names):
+            pin = _pinned_arg(f"plugin.json:{name}", plugin_mcp[name])
+            if pin is not None and mcp_version is not None and pin != mcp_version:
+                errors.append(
+                    f"plugin.json: server '{name}' pins '{pin}', but .mcp.json pins "
+                    f"'{mcp_version}' — plugin and clone mode would use different versions"
+                )
+        return
+
+    errors.append("plugin.json: 'mcpServers' is neither a string nor an object")
 
 
 def main():
@@ -632,6 +900,21 @@ def main():
         body = check_frontmatter_file(path, errors, required_keys=("description",))
         check_links(path, body, errors)
 
+    # Non-SKILL.md reference docs (skills/holiday-planner/01-*.md …
+    # 06-*.md, skills/trip-scraper/search-queries.md) get no frontmatter
+    # requirement, but must still get link checking and the
+    # no-repo-relative-paths scan — they are the files /setup and /scrape
+    # read most, and were previously an unchecked coverage hole.
+    other_skill_md = sorted(
+        set(find_all_markdown(os.path.join(REPO_ROOT, "skills"))) - set(top_skill_files)
+    )
+    for path in other_skill_md:
+        with open(path, "r", encoding="utf-8") as f:
+            body = f.read()
+        check_links(path, body, errors)
+
+    agents_skills_dir = os.path.join(REPO_ROOT, ".agents", "skills")
+    check_discovery_completeness(command_files, skill_files, agents_skills_dir, errors)
     check_agents_skills_structure(errors)
     check_adapter_contract(errors)
     check_path_resolution_block(command_files, errors)
@@ -640,10 +923,13 @@ def main():
     # designed to be copied out standalone and legitimately document a bare
     # `.agents/skills/<name>/search.py` CLI invocation for themselves.
     path_blocks = {path: True for path in command_files}
-    check_no_repo_relative_paths(top_skill_files + command_files, path_blocks, errors)
+    check_no_repo_relative_paths(
+        top_skill_files + other_skill_md + command_files, path_blocks, errors
+    )
 
     check_manifest_consistency(errors)
     check_symlink_integrity(errors)
+    check_mcp_consistency(errors)
 
     if errors:
         sys.stderr.write("lint_skills.py: FAILED\n")

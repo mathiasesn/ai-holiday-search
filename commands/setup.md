@@ -23,6 +23,14 @@ never hardcode a repo-relative path:
 Always report a path under `DATA_ROOT` to the user as an absolute path, since in plugin
 mode it lies outside the current project.
 
+**Fallback if `${CLAUDE_PLUGIN_ROOT}` fails to resolve.** If a path containing
+`${CLAUDE_PLUGIN_ROOT}` does not actually resolve (the variable was not interpolated), do not
+silently fall back to the current working directory. Instead, determine `FRAMEWORK_ROOT` by
+locating the directory that contains both `ARCHI.md` and `.agents/skills/` (this will be either
+the installed plugin directory or this repo's root). If that directory cannot be found either,
+tell the user the framework root could not be resolved and stop — do not read or write any tree
+under a guessed root.
+
 ## Purpose
 Populate the `<DATA_ROOT>/profile/` folder (`01-traveler-profile.md` … `06-packing-and-prep.md`)
 and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `<FRAMEWORK_ROOT>/skills/holiday-planner/`, so
@@ -39,7 +47,7 @@ and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `<FRAMEWORK_R
 - Reads (never writes): `<FRAMEWORK_ROOT>/skills/holiday-planner/01-traveler-profile.md` … `06-packing-and-prep.md` (templates with `<!-- FILL IN -->` markers).
 - Writes: `<DATA_ROOT>/profile/01-traveler-profile.md` … `<DATA_ROOT>/profile/06-packing-and-prep.md`.
 - Writes: `<DATA_ROOT>/profile/tooling.md` (browser-driver preference; see step 6) if it does not already exist, or after confirming an overwrite with the user if it does.
-- Writes: `<DATA_ROOT>/trip_tracker.csv` (copied from `trip_tracker.csv.example`) if it does not already exist.
+- Writes: `<DATA_ROOT>/trip_tracker.csv` (copied from `<FRAMEWORK_ROOT>/trip_tracker.csv.example`) if it does not already exist.
 - Never touches `<DATA_ROOT>/documents/`, `<FRAMEWORK_ROOT>/skills/`, or any tracked framework file.
 
 ## Steps
@@ -75,12 +83,12 @@ and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `<FRAMEWORK_R
      - Read the template from `<FRAMEWORK_ROOT>/skills/holiday-planner/<name>.md`.
      - Replace every `<!-- FILL IN -->` marker with the corresponding captured information. Leave the surrounding structure and framework rules in the template intact — only fill markers, don't rewrite the scaffold.
      - Write the result to `<DATA_ROOT>/profile/<name>.md`, creating the `<DATA_ROOT>/profile/` directory first if needed.
-   - If `<DATA_ROOT>/trip_tracker.csv` does not already exist, copy `trip_tracker.csv.example` to `<DATA_ROOT>/trip_tracker.csv` unmodified (header row only).
-   - **Seed `<DATA_ROOT>/profile/tooling.md`** — the browser-driver preference, documented in `ARCHI.md`. This is not one of the six numbered traveler-preference templates and must never be merged into them; it holds a tooling knob, not travel data.
+   - If `<DATA_ROOT>/trip_tracker.csv` does not already exist, copy `<FRAMEWORK_ROOT>/trip_tracker.csv.example` to `<DATA_ROOT>/trip_tracker.csv` unmodified (header row only).
+   - **Seed `<DATA_ROOT>/profile/tooling.md`** — the browser-driver preference, documented in `<FRAMEWORK_ROOT>/ARCHI.md`. This is not one of the six numbered traveler-preference templates and must never be merged into them; it holds a tooling knob, not travel data.
      - If `<DATA_ROOT>/profile/tooling.md` does not exist, write it with the caller defaults: `/scrape` → `claude-in-chrome`, `/watch` → Playwright MCP.
      - If it already exists, treat this the same as an existing filled profile elsewhere in this flow: do not clobber it silently. Tell the user it already has driver preferences set and ask whether to keep it as-is or reset it to the caller defaults.
 
-7. **State the privacy boundary.** Tell the user explicitly: `<DATA_ROOT>/profile/` and `<DATA_ROOT>/trip_tracker.csv` are local-only (gitignored in clone mode) and must never be committed to the fork. `profile/01…06-*.md` hold their personal travel data; `profile/tooling.md` holds no travel data at all — it's a local tooling knob (which MCP driver runs browser reads) — but it lives in the same `profile/` folder and stays local for the same reason: nothing under `<DATA_ROOT>/profile/` should end up in a shared fork or PR. Report `<DATA_ROOT>`'s absolute path to the user so they know where their local data lives.
+7. **State the privacy boundary.** Tell the user explicitly: `<DATA_ROOT>/profile/` and `<DATA_ROOT>/trip_tracker.csv` are personal data and must never be committed anywhere — in plugin mode they live outside any repo (under `~/.ai-holiday-search`), and in clone mode they are gitignored. `profile/01…06-*.md` hold their personal travel data; `profile/tooling.md` holds no travel data at all — it's a local tooling knob (which MCP driver runs browser reads) — but it lives in the same `profile/` folder and stays local for the same reason: nothing under `<DATA_ROOT>/profile/` should end up in a shared fork or PR. Report `<DATA_ROOT>`'s absolute path to the user so they know where their local data lives.
 
 8. **Echo a summary for confirmation.** Print a short recap of the captured profile — group composition, home airports, budget range, style, top dealbreakers, and 2-3 history highlights with their stated opinions — and ask the user to confirm it's accurate or point out corrections. Do not treat the profile as final until confirmed; re-write the affected file(s) if the user corrects something.
 

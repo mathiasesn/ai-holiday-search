@@ -23,6 +23,14 @@ never hardcode a repo-relative path:
 Always report a path under `DATA_ROOT` to the user as an absolute path, since in plugin
 mode it lies outside the current project.
 
+**Fallback if `${CLAUDE_PLUGIN_ROOT}` fails to resolve.** If a path containing
+`${CLAUDE_PLUGIN_ROOT}` does not actually resolve (the variable was not interpolated), do not
+silently fall back to the current working directory. Instead, determine `FRAMEWORK_ROOT` by
+locating the directory that contains both `ARCHI.md` and `.agents/skills/` (this will be either
+the installed plugin directory or this repo's root). If that directory cannot be found either,
+tell the user the framework root could not be resolved and stop — do not read or write any tree
+under a guessed root.
+
 ## Purpose
 Snapshot trips found via `/scrape` or `/plan` into a local watchlist, then re-check them on demand
 (or on a schedule) to report price drops, rises, and sold-out warnings.
@@ -75,7 +83,7 @@ If this run needs profile data (e.g. resolving `<trip>` against profile-derived 
 4. Highlight drops and sold-out warnings first — these are the actionable items. Report blocked reads separately from sold-out warnings; do not let a run with several blocked browser-driven trips read as mass sold-out.
 
 ## Scheduling
-`/watch` (no args) is idempotent, and both adapter-backed and browser-driven trips can now run unattended. Neither an unattended scheduled run nor a manual attended one has yet been exercised against the real sites — verify the first few scheduled runs manually before relying on them. See `<FRAMEWORK_ROOT>/skills/price-watch/SKILL.md` "Scheduling" and `ARCHI.md` §7 for the driver rationale and server config.
+`/watch` (no args) is idempotent, and both adapter-backed and browser-driven trips can now run unattended. Neither an unattended scheduled run nor a manual attended one has yet been exercised against the real sites — verify the first few scheduled runs manually before relying on them. See `<FRAMEWORK_ROOT>/skills/price-watch/SKILL.md` "Scheduling" and `<FRAMEWORK_ROOT>/ARCHI.md` §7 for the driver rationale and server config.
 
 ## Output
 Updated `<DATA_ROOT>/watchlist/<slug>.json` file(s) with appended price history, and a human-readable price-change report on each `/watch` (no-args) run.

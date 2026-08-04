@@ -50,4 +50,4 @@
 ---
 
 Referenced by the README's Customization table: "Default destinations, date windows, and
-sources for /scrape." Used by `trip-scraper/SKILL.md` to build adapter queries.
+sources for /scrape." Used by `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md` to build adapter queries.

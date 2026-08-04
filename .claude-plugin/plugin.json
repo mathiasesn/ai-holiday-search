@@ -15,5 +15,6 @@
     "flights",
     "price-tracking",
     "claude-code-plugin"
-  ]
+  ],
+  "mcpServers": "./.mcp.json"
 }

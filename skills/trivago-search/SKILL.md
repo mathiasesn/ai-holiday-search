@@ -30,7 +30,7 @@ run on a schedule — that is the sole reason the second driver exists. The shar
 drivers: after 2-3 consecutive tool failures on any step, stop retrying and drop to the
 fallback chain below (see there for the full trigger list).
 
-The Playwright MCP server is declared in the repo's tracked `.mcp.json` (see `ARCHI.md` §7 for
+The Playwright MCP server is declared in the tracked `<FRAMEWORK_ROOT>/.mcp.json` (see `<FRAMEWORK_ROOT>/ARCHI.md` §7 for
 both servers' full argument lists). The tool names below were confirmed present in a connected
 Playwright MCP session on 2026-07-26.
 
@@ -56,8 +56,8 @@ booking-search) commit to under "Limits and etiquette".
 **Why these Playwright flags:**
 
 - `--headless`: a scheduled/cron run has no display; a headed browser cannot start there. This
-  flag is what makes the scheduling claim above actually true. The tracked `.mcp.json` also
-  declares a second, headed `playwright-headed` server for attended debugging — see `ARCHI.md`
+  flag is what makes the scheduling claim above actually true. The tracked `<FRAMEWORK_ROOT>/.mcp.json` also
+  declares a second, headed `playwright-headed` server for attended debugging — see `<FRAMEWORK_ROOT>/ARCHI.md`
   §7 for the recipe and both servers' config; this file only needs the hazard note that follows.
 - `--isolated`: a fresh profile per run, no persisted cookies or login state. This side-steps
   the privacy hazard in step 3 below (the homepage prefills the user's previous search and
