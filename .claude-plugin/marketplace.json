@@ -1,0 +1,14 @@
+{
+  "name": "ai-holiday-search",
+  "owner": {
+    "name": "Mathias Nielsen"
+  },
+  "plugins": [
+    {
+      "name": "ai-holiday-search",
+      "source": "./",
+      "description": "An AI-powered holiday planning framework built on Claude Code that finds trips fitting your profile, scores them against your preferences, builds reviewed day-by-day itineraries, and watches prices until you book.",
+      "version": "0.1.0"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "ai-holiday-search",
+  "version": "0.1.0",
+  "description": "An AI-powered holiday planning framework built on Claude Code that finds trips fitting your profile, scores them against your preferences, builds reviewed day-by-day itineraries, and watches prices until you book.",
+  "author": {
+    "name": "Mathias Nielsen"
+  },
+  "repository": "https://github.com/mathiasesn/ai-holiday-search",
+  "license": "MIT",
+  "keywords": [
+    "holiday",
+    "travel",
+    "trip-planning",
+    "itinerary",
+    "flights",
+    "price-tracking",
+    "claude-code-plugin"
+  ]
+}
