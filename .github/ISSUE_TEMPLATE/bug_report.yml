@@ -1,0 +1,89 @@
+name: Bug report
+description: Something in AI Holiday Search behaves incorrectly
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please search the [existing issues](../../issues)
+        — the bug may already be reported or knowingly deferred.
+
+        **Do not paste personal data.** Redact real names, addresses, passport
+        or booking references, `.env` contents, and API keys before submitting.
+        Placeholder values are fine.
+
+  - type: dropdown
+    id: command
+    attributes:
+      label: Command
+      description: Which command does this affect?
+      options:
+        - /setup
+        - /scrape
+        - /plan
+        - /watch
+        - /reset
+        - a search skill (trivago / momondo / booking / trip-scraper)
+        - other / not command-specific
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did the command do, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: |
+        Exact command invocation, plus the smallest input that triggers it —
+        a redacted profile snippet, a pasted listing, or the search terms used.
+        For example:
+
+        ```
+        /scrape 5 nights, direct flights only, mid-September
+
+        profile/01-traveler-profile.md (redacted):
+        - Travelers: 2 adults
+        - Home airport: XXX
+        - Dealbreakers: no connecting flights
+        ```
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: The assistant's response, tool errors, or scraper output. Redact personal data.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Repo version
+      description: Commit SHA of your checkout (`git rev-parse --short HEAD`).
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, plus the browser driver in use if this is a scraping bug.
+      placeholder: "Linux 6.8 x86_64 / claude-in-chrome"
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Logs, screenshots, related issues.

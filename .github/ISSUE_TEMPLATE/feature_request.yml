@@ -1,0 +1,62 @@
+name: Feature request
+description: Propose a new capability, rule, or change in behaviour
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please search the [existing issues](../../issues)
+        — the idea may already be proposed, planned, or deliberately declined.
+
+        **Do not paste personal data.** Use placeholder profile values in examples.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - /setup (profile onboarding)
+        - /scrape (search and fit scoring)
+        - /plan (itinerary drafting and verification)
+        - /watch (price watchlist)
+        - /reset
+        - New or changed search source (trivago / momondo / booking / other)
+        - holiday-planner skill (profile, fit scoring, pacing, budget, packing)
+        - Framework rules (CLAUDE.md / AGENTS.md / ARCHI.md)
+        - docs
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today, and why does that hurt?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: >
+        What should happen instead? For a new search source, state which
+        verticals it covers (flights / stays / packages) and its fallback when
+        the site blocks automation. For a rule change, state whether it is a
+        hard constraint or a suggestion.
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: A command invocation plus the output you'd want.
+      render: shell
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
