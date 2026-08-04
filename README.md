@@ -1,4 +1,19 @@
-# AI Holiday Search
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/ai-holiday-search-logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/logo/ai-holiday-search-logo.svg">
+    <img src="assets/logo/ai-holiday-search-logo.svg" alt="AI Holiday Search" width="720">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="https://github.com/mathiasesn/ai-holiday-search/actions/workflows/ci.yml"><img src="https://github.com/mathiasesn/ai-holiday-search/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+">
+  <a href="https://docs.astral.sh/uv/"><img src="https://img.shields.io/badge/packaged%20with-uv-261230.svg" alt="Packaged with uv"></a>
+  <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/built%20for-Claude%20Code-D97757.svg" alt="Built for Claude Code"></a>
+  <a href="https://github.com/mathiasesn/ai-holiday-search/issues"><img src="https://img.shields.io/github/issues/mathiasesn/ai-holiday-search.svg" alt="Open issues"></a>
+</p>
 
 An AI-powered holiday planning framework built on [Claude Code](https://claude.com/claude-code). Fork it, fill in your travel profile, and let Claude find trips that fit you, score them against your preferences, build reviewed day-by-day itineraries, and watch prices until you book.
 
