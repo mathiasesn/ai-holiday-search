@@ -15,7 +15,7 @@
   <a href="https://github.com/mathiasesn/ai-holiday-search/issues"><img src="https://img.shields.io/github/issues/mathiasesn/ai-holiday-search.svg" alt="Open issues"></a>
 </p>
 
-An AI-powered holiday planning framework built on [Claude Code](https://claude.com/claude-code). Fork it, fill in your travel profile, and let Claude find trips that fit you, score them against your preferences, build reviewed day-by-day itineraries, and watch prices until you book.
+An AI-powered holiday planning framework built on [Claude Code](https://claude.com/claude-code). Install it as a plugin (or fork/clone it to modify the framework itself), fill in your travel profile, and let Claude find trips that fit you, score them against your preferences, build reviewed day-by-day itineraries, and watch prices until you book.
 
 *Inspired by the structure of [ai-job-search](https://github.com/MadsLorentzen/ai-job-search).*
 
@@ -41,6 +41,26 @@ files ready      with fit ratings        budget (day-by-day)     price drops
 
 The framework encodes trip-planning best practices: structured fit criteria, realistic pacing (no 6-museums-a-day itineraries), budget verification, and a second-agent review that checks the plan against reality — opening hours, seasonal weather, local events, and known tourist traps.
 
+## Install
+
+Two ways to get this running, both fully supported:
+
+- **Plugin install (recommended)** — no clone needed. Inside Claude Code:
+  ```
+  /plugin marketplace add mathiasesn/ai-holiday-search
+  /plugin install ai-holiday-search
+  ```
+  The repo is its own marketplace. Your traveler profile and all generated state live in
+  `~/.ai-holiday-search/` (shared across every project you use the plugin from), never in
+  a project directory — nothing personal is ever written where you're working.
+- **Fork/clone** — for people who want to modify the framework itself (edit commands,
+  skills, add a search source). See [Quick start](#quick-start) below. Profile and
+  generated state live inside the repo checkout (gitignored), same as before.
+
+Both modes run the same five commands and the same two Playwright MCP servers (declared
+once, in the root `.mcp.json`). See [SETUP.md](SETUP.md) for full step-by-step
+instructions for each route, including the Windows/ZIP-download limitation on clone mode.
+
 ## Prerequisites
 
 - [Claude Code](https://claude.com/claude-code) (CLI)
@@ -53,7 +73,11 @@ The framework encodes trip-planning best practices: structured fit criteria, rea
 
 ## Quick start
 
-### 1. Fork and clone
+The steps below are identical whether you installed the plugin or forked/cloned — only
+where the profile and generated files land differs (plugin: `~/.ai-holiday-search/`;
+clone: inside the repo). If you haven't installed yet, see [Install](#install).
+
+### 1. Fork and clone (skip if you installed the plugin)
 
 ```
 gh repo fork <you>/ai-holiday-search --clone
@@ -122,43 +146,54 @@ Confirmed against the real sites on 2026-07-26: a saved trivago trip was re-pric
 
 ## File structure
 
+Framework content lives at the repo root in `commands/` and `skills/` so an installed
+plugin can auto-discover it directly. `.claude/commands` and `.claude/skills` are tracked
+symlinks pointing at those same directories — that's what keeps clone mode working with
+zero configuration, since Claude Code also reads project commands/skills from `.claude/`.
+
 ```
 ai-holiday-search/
-├── CLAUDE.md                            # Framework/workflow rules only (no personal data)
+├── AGENTS.md                            # Framework/workflow rules only (no personal data)
+├── CLAUDE.md -> AGENTS.md                # Symlink (Claude Code reads this filename)
 ├── .mcp.json                            # Two Playwright MCP servers: headless (unattended-capable) + headed (debugging)
+├── .claude-plugin/
+│   ├── plugin.json                      # Plugin manifest (name, version, metadata)
+│   └── marketplace.json                 # Makes this repo its own marketplace (source: "./")
+├── commands/
+│   ├── setup.md                         # /setup onboarding (documents, paste, or interview)
+│   ├── scrape.md                        # /scrape search orchestration
+│   ├── plan.md                          # /plan drafter–reviewer itinerary workflow
+│   ├── watch.md                         # /watch price tracking
+│   └── reset.md                         # /reset wipe profile data
+├── skills/
+│   ├── holiday-planner/                 # Core planning skill
+│   │   ├── SKILL.md                     # Skill definition
+│   │   ├── 01-traveler-profile.md       # Who travels, constraints, budget
+│   │   ├── 02-travel-style.md           # Pace, taste, accommodation standard
+│   │   ├── 03-trip-evaluation.md        # Scoring framework for trip fit
+│   │   ├── 04-itinerary-templates.md    # Day-plan structure + pacing rules
+│   │   ├── 05-budget-rules.md           # Cost categories, verification, buffers
+│   │   └── 06-packing-and-prep.md       # Packing lists, docs, insurance checklist
+│   ├── trip-scraper/                    # Search orchestration across sources
+│   ├── price-watch/                     # Snapshot + re-check logic
+│   ├── trivago-search/                  # trivago.dk stays source, driven in a real browser
+│   ├── momondo-search/                  # momondo.dk flights/stays/packages, driven in a real browser
+│   └── booking-search/                  # booking.com stays/flights, driven in a real browser
 ├── .claude/
-│   ├── commands/
-│   │   ├── setup.md                     # /setup onboarding (documents, paste, or interview)
-│   │   ├── scrape.md                    # /scrape search orchestration
-│   │   ├── plan.md                      # /plan drafter–reviewer itinerary workflow
-│   │   ├── watch.md                     # /watch price tracking
-│   │   └── reset.md                     # /reset wipe profile data
-│   ├── skills/
-│   │   ├── holiday-planner/             # Core planning skill
-│   │   │   ├── SKILL.md                 # Skill definition
-│   │   │   ├── 01-traveler-profile.md   # Who travels, constraints, budget
-│   │   │   ├── 02-travel-style.md       # Pace, taste, accommodation standard
-│   │   │   ├── 03-trip-evaluation.md    # Scoring framework for trip fit
-│   │   │   ├── 04-itinerary-templates.md# Day-plan structure + pacing rules
-│   │   │   ├── 05-budget-rules.md       # Cost categories, verification, buffers
-│   │   │   └── 06-packing-and-prep.md   # Packing lists, docs, insurance checklist
-│   │   ├── trip-scraper/                # Search orchestration across sources
-│   │   ├── price-watch/                 # Snapshot + re-check logic
-│   │   ├── trivago-search/              # trivago.dk stays source, driven in a real browser
-│   │   ├── momondo-search/              # momondo.dk flights/stays/packages, driven in a real browser
-│   │   └── booking-search/              # booking.com stays/flights, driven in a real browser
+│   ├── commands -> ../commands          # Symlink, so clone mode picks up the same files
+│   ├── skills -> ../skills              # Symlink, so clone mode picks up the same files
 │   └── settings.local.json              # Claude Code permissions
 ├── .agents/skills/                      # Search source skills (add your own)
 │   ├── flights-search/                  # Flight search (API or web-search based)
 │   ├── stays-search/                    # Hotels / rentals
 │   └── packages-search/                 # Package holidays / charters (template)
-├── documents/                           # Source material for /setup
+├── documents/                           # Source material for /setup (clone mode; plugin mode: ~/.ai-holiday-search/documents/)
 │   ├── README.md                        # Folder layout instructions
 │   ├── past-trips/                      # Old itineraries, booking confirmations
 │   └── preferences/                     # Freeform notes on likes/dislikes
-├── itineraries/                         # /plan output (one folder per trip)
-├── watchlist/                           # /watch state (trip snapshots, price history)
-├── trip_scraper/                        # Scraper state (seen trips, results)
+├── itineraries/                         # /plan output, clone mode only (plugin mode: ~/.ai-holiday-search/itineraries/)
+├── watchlist/                           # /watch state, clone mode only (plugin mode: ~/.ai-holiday-search/watchlist/)
+├── trip_scraper/                        # Scraper state, clone mode only (plugin mode: ~/.ai-holiday-search/trip_scraper/)
 ├── trip_tracker.csv.example             # Shortlist tracking spreadsheet template (copy to trip_tracker.csv, gitignored)
 ├── tools/
 │   ├── lint_skills.py                   # Validates SKILL.md/command frontmatter and cross-links
@@ -169,6 +204,11 @@ ai-holiday-search/
 ├── .python-version                      # Pinned Python version for uv
 └── SETUP.md                             # Detailed setup guide
 ```
+
+In plugin mode, all personal/generated data (`profile/`, `itineraries/`, `watchlist/`,
+`trip_scraper/`, `trip_tracker.csv`, `documents/`) lives under `~/.ai-holiday-search/`
+instead of inside your project — one shared profile reused across every project. In
+clone mode it's the gitignored directories shown above, inside the repo checkout.
 
 ## How `/plan` works
 
@@ -208,7 +248,7 @@ Sources come in two kinds. Most are thin CLI adapters in `.agents/skills/`; thre
 
 A few things worth knowing before relying on them. What a headline price includes varies by site and vertical — some exclude taxes and fees, some quote per person rather than per party — so every figure they report is labeled an estimate. Because they read live sites rather than stable APIs, they need occasional re-verification when the pages change ([issue #9](https://github.com/mathiasesn/ai-holiday-search/issues/9)). And when more than one surfaces the same hotel at different prices, `/scrape` shows you **all quotes side by side** rather than picking one — the gap between them is itself useful information about how firm the price is — while still scoring that property once, on the lowest figure, so it can't crowd out the rest of your shortlist.
 
-Adding a CLI adapter = copying a skill folder in `.agents/skills/`, pointing it at a site or API, and describing the result format in its SKILL.md. Adding a browser-driven source = a Markdown-only skill under `.claude/skills/`, with its own fallback chain and no `search.py`. `ARCHI.md` §8 documents both paths. PRs adding country-specific package/charter skills are welcome — that's the intended way this grows.
+Adding a CLI adapter = copying a skill folder in `.agents/skills/`, pointing it at a site or API, and describing the result format in its SKILL.md. Adding a browser-driven source = a Markdown-only skill under `skills/`, with its own fallback chain and no `search.py`. `ARCHI.md` §8 documents both paths. PRs adding country-specific package/charter skills are welcome — that's the intended way this grows.
 
 ## Customization
 
