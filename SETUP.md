@@ -166,7 +166,7 @@ Scheduling covers browser-driven trips too, not just the API adapters. `/watch` 
 Playwright MCP server in `.mcp.json`, which needs no attended session and no site
 permission. Confirmed on 2026-07-26 by an on-demand run that read a live trivago price
 headlessly; the *scheduled* path itself (cron, CI, recurring task) has not been exercised
-yet — see [BACKLOG.md](BACKLOG.md) item 10.
+yet — see [issue #8](https://github.com/mathiasesn/ai-holiday-search/issues/8).
 
 Two things to expect from unattended browser reads. Sites can block them: trivago rejects
 headless Chrome's default User-Agent, which is why the tracked `.mcp.json` overrides it.

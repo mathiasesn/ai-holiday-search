@@ -36,7 +36,7 @@ Playwright MCP session on 2026-07-26.
 
 A walkthrough on 2026-07-26 reached the real trivago.dk through the Playwright driver but was
 blocked before reading a results page, so no step below is read-confirmed against the live site
-— see `BACKLOG.md` items 10 and 11.
+— see [issue #8](https://github.com/mathiasesn/ai-holiday-search/issues/8) and [issue #9](https://github.com/mathiasesn/ai-holiday-search/issues/9).
 
 | Capability | `claude-in-chrome` tool | Playwright MCP tool |
 |---|---|---|
@@ -67,8 +67,8 @@ booking-search) commit to under "Limits and etiquette".
 - `--user-agent` with an ordinary Chrome UA: **required for trivago specifically.** Headless
   Chrome's default UA advertises `HeadlessChrome`, which trivago's edge 403s at the document
   level, so no in-page workaround can recover it (fallback-chain condition 4). Set on the
-  server, so no procedure step needs to know. Evidence and per-source scope: `BACKLOG.md`
-  item 10.
+  server, so no procedure step needs to know. Evidence and per-source scope:
+  [issue #8](https://github.com/mathiasesn/ai-holiday-search/issues/8).
 
 ### Unattended terminal outcome
 

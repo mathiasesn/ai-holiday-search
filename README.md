@@ -103,7 +103,7 @@ This runs the full workflow: evaluate fit, draft a day-by-day itinerary with bud
 
 Trips from the browser-driven trivago, momondo, and booking sources are re-checkable unattended too: `/watch` drives them through the Playwright MCP server declared in this repo's tracked `.mcp.json`, which runs headless and needs no attended session.
 
-Confirmed against the real sites on 2026-07-26: a saved trivago trip was re-priced headlessly, with no attended session. Getting there turned up one thing worth knowing — trivago's bot protection rejects headless Chrome's default User-Agent, so the tracked `.mcp.json` overrides it. Expect blocked reads anyway: they are recorded as *could not verify*, reported separately from a sold-out warning, and never overwrite the last known good price. Two caveats remain: only trivago has actually been read this way (momondo and booking haven't), and the *scheduled* mode (cron, CI, or a recurring Claude Code task) has never been exercised. See `BACKLOG.md` item 10.
+Confirmed against the real sites on 2026-07-26: a saved trivago trip was re-priced headlessly, with no attended session. Getting there turned up one thing worth knowing — trivago's bot protection rejects headless Chrome's default User-Agent, so the tracked `.mcp.json` overrides it. Expect blocked reads anyway: they are recorded as *could not verify*, reported separately from a sold-out warning, and never overwrite the last known good price. Two caveats remain: only trivago has actually been read this way (momondo and booking haven't), and the *scheduled* mode (cron, CI, or a recurring Claude Code task) has never been exercised. See [issue #8](https://github.com/mathiasesn/ai-holiday-search/issues/8).
 
 ## File structure
 
@@ -191,7 +191,7 @@ Sources come in two kinds. Most are thin CLI adapters in `.agents/skills/`; thre
 
 **Why the browser-driven sources are different.** None has a public search API — booking.com's Demand API is partner-gated, and all of them refuse non-browser clients outright — so those skills drive your actual Chrome session instead of making HTTP calls. They run alongside the regular adapters, not instead of them, and each runs only the verticals your query actually calls for (the table above lists which verticals each one covers), so a flight-only search doesn't go hunting for hotels. If the extension isn't installed, permission isn't granted, or a site throws a bot challenge, `/scrape` degrades to web search and then to asking you to paste a listing — the run always completes.
 
-A few things worth knowing before relying on them. What a headline price includes varies by site and vertical — some exclude taxes and fees, some quote per person rather than per party — so every figure they report is labeled an estimate. Because they read live sites rather than stable APIs, they need occasional re-verification when the pages change ([BACKLOG.md](BACKLOG.md) item 11). And when more than one surfaces the same hotel at different prices, `/scrape` shows you **all quotes side by side** rather than picking one — the gap between them is itself useful information about how firm the price is — while still scoring that property once, on the lowest figure, so it can't crowd out the rest of your shortlist.
+A few things worth knowing before relying on them. What a headline price includes varies by site and vertical — some exclude taxes and fees, some quote per person rather than per party — so every figure they report is labeled an estimate. Because they read live sites rather than stable APIs, they need occasional re-verification when the pages change ([issue #9](https://github.com/mathiasesn/ai-holiday-search/issues/9)). And when more than one surfaces the same hotel at different prices, `/scrape` shows you **all quotes side by side** rather than picking one — the gap between them is itself useful information about how firm the price is — while still scoring that property once, on the lowest figure, so it can't crowd out the rest of your shortlist.
 
 Adding a CLI adapter = copying a skill folder in `.agents/skills/`, pointing it at a site or API, and describing the result format in its SKILL.md. Adding a browser-driven source = a Markdown-only skill under `.claude/skills/`, with its own fallback chain and no `search.py`. `ARCHI.md` §8 documents both paths. PRs adding country-specific package/charter skills are welcome — that's the intended way this grows.
 
@@ -226,7 +226,7 @@ Adding a CLI adapter = copying a skill folder in `.agents/skills/`, pointing it 
 
 ## Roadmap
 
-Planned features and known engineering debt live in [BACKLOG.md](BACKLOG.md).
+Planned features and known engineering debt are tracked as [GitHub issues](https://github.com/mathiasesn/ai-holiday-search/issues) — `roadmap` for planned features, `tech-debt` for known debt.
 
 ## License
 

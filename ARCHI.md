@@ -14,7 +14,7 @@ This is the structural source of truth for `ai-holiday-search`: what exists, whe
 
 Read sections 2–4 to orient, 8–10 for the parts of this repo that cannot be guessed from the file tree (the adapter contract, the data boundary, and how the prompt layer composes), and section 12 for the non-negotiables.
 
-Known gaps, deferred decisions, and engineering debt are tracked in `BACKLOG.md` at the repo root — consult it before "fixing" something that looks broken, since several apparent problems (notably the adapter code duplication) are deliberate and documented there.
+Known gaps, deferred decisions, and engineering debt are tracked as [GitHub issues](https://github.com/mathiasesn/ai-holiday-search/issues) — consult them before "fixing" something that looks broken, since several apparent problems (notably the adapter code duplication) are deliberate and documented there. Decisions that were made and rejected are filed as **closed** issues, so search closed issues too, not just open ones.
 
 ---
 
@@ -49,7 +49,7 @@ A defining constraint: **every external-data path degrades gracefully.** No adap
 | Optional browser drivers | `claude-in-chrome` MCP tools, Playwright MCP | Only for browser-driven sources (§8). Either can run all three (trivago/momondo/booking). `/scrape` defaults to `claude-in-chrome` (attended, per-site permission); `/watch` defaults to Playwright (the only one that runs unattended). Preference resolved via `profile/tooling.md` (§9); absent ⇒ caller default. Neither present ⇒ web-search fallback |
 | MCP server | Two Playwright servers, declared in tracked `.mcp.json` | `playwright` — headless, for unattended/cron runs. `playwright-headed` — same version, visible browser, for attended debugging. Both isolated (fresh profile, no persisted cookies) per run. **§7 owns both argument lists** |
 
-There is no test framework, no linter config, and no formatter config in this repo. `tools/lint_skills.py` is a bespoke structural linter, not a Python style linter. Adding real tests is `BACKLOG.md` item 1.
+There is no test framework, no linter config, and no formatter config in this repo. `tools/lint_skills.py` is a bespoke structural linter, not a Python style linter. Adding real tests is [issue #1](https://github.com/mathiasesn/ai-holiday-search/issues/1).
 
 ---
 
@@ -61,7 +61,6 @@ ai-holiday-search/
 ├── ARCHI.md                        # This file — architecture memory, authority on structure
 ├── README.md                       # User-facing guide (fork → setup → scrape → plan → watch)
 ├── SETUP.md                        # Detailed install/prereq guide
-├── BACKLOG.md                      # Known debt + deferred decisions; read before "fixing" oddities
 ├── pyproject.toml                  # name/version, requires-python >=3.10, deps=[requests], package=false
 ├── uv.lock                         # Committed lock for the project env (NOT the adapters)
 ├── .python-version                 # 3.12 — dev pin uv provisions
@@ -79,7 +78,7 @@ ai-holiday-search/
 │   │   ├── trivago-search/         # SKILL.md: browser-driven stays source, no search.py, own fallback chain
 │   │   ├── momondo-search/         # SKILL.md: browser-driven flights/stays/packages source, no search.py, own fallback chain
 │   │   └── booking-search/         # SKILL.md: browser-driven stays/flights source, no search.py, own fallback chain
-│   └── settings.local.json         # Per-user permissions; untracked — see BACKLOG item 4
+│   └── settings.local.json         # Per-user permissions; untracked — see issue #4
 │
 ├── .agents/skills/                 # Agent-AGNOSTIC search adapters — designed to be copied out wholesale
 │   ├── flights-search/             # SKILL.md + executable search.py (Amadeus)
@@ -107,15 +106,15 @@ ai-holiday-search/
 
 ## 5. Core Architecture Principles
 
-These are the principles actually governing this codebase, inferred from the code and confirmed by its comments and `BACKLOG.md`:
+These are the principles actually governing this codebase, inferred from the code and confirmed by its comments and the issue tracker:
 
 1. **Logic lives in Markdown; Python is I/O only.** Scoring, pacing, budgeting, and pipeline sequencing are specified in `.claude/skills/**`. Do not port that logic into Python — the agent is the interpreter. Python exists only where a deterministic external call or a hygiene check is needed.
 2. **Graceful degradation is mandatory, never optional.** Every source has a fallback chain, whatever its kind: adapter (exit 2) or browser read (unreachable, permission denied, bot challenge) → Claude web search → user pastes text. The paste path is a first-class input that enters the same evaluate → draft → review → verify pipeline, per `CLAUDE.md`. No source may fail a `/scrape` run.
-3. **Adapters are self-contained, and duplication is the accepted price.** The copy-a-folder fork workflow means `.agents/skills/*/search.py` cannot import a shared module. ~330 near-identical lines across the three adapters is a **deliberate, rejected-refactor** decision (`BACKLOG.md` item 7), guarded by a CI drift check instead of deduplicated.
+3. **Adapters are self-contained, and duplication is the accepted price.** The copy-a-folder fork workflow means `.agents/skills/*/search.py` cannot import a shared module. ~330 near-identical lines across the three adapters is a **deliberate, rejected-refactor** decision ([issue #17](https://github.com/mathiasesn/ai-holiday-search/issues/17), closed as not planned), guarded by a CI drift check instead of deduplicated.
 4. **Personal data never enters git.** Enforced structurally by `.gitignore` and mechanically by `tools/security_guards.py`, not by convention alone. See §9.
 5. **Tracked templates are the *shape*, never the data.** `.claude/skills/holiday-planner/0X-*.md` carry `<!-- FILL IN -->` markers and generic defaults. A filled `profile/0X-*.md` copy always wins when present; if `profile/` is absent, commands must stop and say "run `/setup`" rather than plan against placeholder examples.
 6. **One authority per schema.** Each shared data shape is defined in exactly one file, and everything else points back to it. `.claude/skills/trip-scraper/SKILL.md` is authoritative for the adapter result record, the no-credentials protocol, the normalized candidate record, and `seen.json`. `.claude/skills/price-watch/SKILL.md` is authoritative for the watchlist schema. Adapter `SKILL.md`s and Python docstrings only summarize and link back.
-7. **Guards must fail loudly, never silently pass.** Both `tools/` scripts treat "could not determine the answer" (e.g. a git failure) as a hard error. This is scar tissue: two guards previously passed unconditionally while checking nothing (documented in `BACKLOG.md` item 1).
+7. **Guards must fail loudly, never silently pass.** Both `tools/` scripts treat "could not determine the answer" (e.g. a git failure) as a hard error. This is scar tissue: two guards previously passed unconditionally while checking nothing (documented in [issue #1](https://github.com/mathiasesn/ai-holiday-search/issues/1)).
 
 ---
 
@@ -143,13 +142,13 @@ uv run .agents/skills/stays-search/search.py --destination Lisbon --check-in 202
 
 | Job | What it proves |
 |---|---|
-| `lint-and-guards` | `uv sync`, then both `tools/` scripts exit 0. Runs only on the `.python-version` pin (3.12) — see `BACKLOG.md` item 9. |
+| `lint-and-guards` | `uv sync`, then both `tools/` scripts exit 0. Runs only on the `.python-version` pin (3.12) — see [issue #7](https://github.com/mathiasesn/ai-holiday-search/issues/7). |
 | `adapter-smoke` | Each adapter's `--help` succeeds on Python 3.10 **and** 3.12, with all credential env vars unset. Uses `uv run --python X`, which fails rather than silently falling back to the pin. |
 | `standalone-adapter` | Each adapter folder is copied to a `mktemp -d` outside the repo and run there. This is the guard on the copy-a-folder fork workflow: a broken PEP 723 header in any adapter must fail here. |
 
 The credential env-var list lives once in the workflow's top-level `env.ADAPTER_CRED_VARS`. **A new adapter credential must be added there**, not per-job.
 
-No tests exist. `BACKLOG.md` item 1 explains why that is the highest-priority gap: CI asserting exit 0 cannot distinguish a working guard from a guard that checks nothing.
+No tests exist. [Issue #1](https://github.com/mathiasesn/ai-holiday-search/issues/1) explains why that is the highest-priority gap: CI asserting exit 0 cannot distinguish a working guard from a guard that checks nothing.
 
 ---
 
@@ -157,7 +156,7 @@ No tests exist. `BACKLOG.md` item 1 explains why that is the highest-priority ga
 
 Adapter configuration is environment variables; there is no adapter-specific config file. Every variable is **optional** — unset means the adapter takes its documented fallback path. The one exception is MCP server configuration: tracked `.mcp.json` at the repo root declares two Playwright MCP servers — see §3.
 
-**`playwright`** (`npx -y @playwright/mcp@0.0.78 --headless --isolated --user-agent "…Chrome/149.0.0.0…"`) is the one the `/watch` browser path (and the `/scrape` Playwright opt-in) depend on. `--headless`: a scheduled/cron run has no display, so a headed browser cannot start there. `--isolated`: a fresh profile per run, no persisted cookies or login state — this is what neutralizes the browser-driven skills' prefilled-previous-search privacy hazard (trivago/momondo/booking all arrive prefilled from account history when a real, logged-in session is used instead). Trade-off: consent/cookie walls appear on every run, which is why the browser-driven skills define an unattended terminal outcome. `--user-agent`: overrides headless Chrome's default UA, which trivago rejects — rationale and per-source scope in `.claude/skills/trivago-search/SKILL.md` ("Why these Playwright flags"), evidence in `BACKLOG.md` item 10.
+**`playwright`** (`npx -y @playwright/mcp@0.0.78 --headless --isolated --user-agent "…Chrome/149.0.0.0…"`) is the one the `/watch` browser path (and the `/scrape` Playwright opt-in) depend on. `--headless`: a scheduled/cron run has no display, so a headed browser cannot start there. `--isolated`: a fresh profile per run, no persisted cookies or login state — this is what neutralizes the browser-driven skills' prefilled-previous-search privacy hazard (trivago/momondo/booking all arrive prefilled from account history when a real, logged-in session is used instead). Trade-off: consent/cookie walls appear on every run, which is why the browser-driven skills define an unattended terminal outcome. `--user-agent`: overrides headless Chrome's default UA, which trivago rejects — rationale and per-source scope in `.claude/skills/trivago-search/SKILL.md` ("Why these Playwright flags"), evidence in [issue #8](https://github.com/mathiasesn/ai-holiday-search/issues/8).
 
 **`playwright-headed`** (`npx -y @playwright/mcp@0.0.78 --isolated`, no `--headless`) is a second, tracked server for attended debugging with a visible browser window — registered out of the box so `/scrape`'s Playwright opt-in can be run headed without any manual `claude mcp add`. It keeps `--isolated` for the same privacy reason as above, and deliberately carries **no** `--user-agent`: a headed browser advertises no `Headless` token, so there is nothing to override. Point the driver at it for a debugging session, then go back to `playwright` for normal use.
 
@@ -192,7 +191,7 @@ Each `search.py` starts with a PEP 723 inline metadata header:
 # ///
 ```
 
-This header — not `pyproject.toml` — is what lets `uv run search.py` work in a copied folder outside the repo. `uv run` on a script resolves an isolated env from the inline block and **does not consult `uv.lock`**, so adapter dependencies resolve unpinned on every run (`BACKLOG.md` items 6 and 8; item 8 also notes that nothing currently exercises the header, because `requests` is imported lazily inside `main()` after the no-credentials early return).
+This header — not `pyproject.toml` — is what lets `uv run search.py` work in a copied folder outside the repo. `uv run` on a script resolves an isolated env from the inline block and **does not consult `uv.lock`**, so adapter dependencies resolve unpinned on every run ([issue #5](https://github.com/mathiasesn/ai-holiday-search/issues/5) and [issue #6](https://github.com/mathiasesn/ai-holiday-search/issues/6); #6 also notes that nothing currently exercises the header, because `requests` is imported lazily inside `main()` after the no-credentials early return).
 
 ### Exit-code protocol
 
@@ -226,7 +225,7 @@ This is **distinct from** the "normalized candidate record" that `trip-scraper` 
 
 **CLI adapter:** copy an existing adapter folder, rename it, update `SKILL.md` frontmatter `name` to match the new directory, point `search.py` at your API, keep the exit-code protocol and result-record shape exactly, add any new credential env vars to `ADAPTER_CRED_VARS` in the CI workflow and to `ALLOWED_ENV_VAR_NAMES` in `tools/security_guards.py`, and `chmod +x search.py`. Do not introduce a shared import.
 
-**Browser-driven source:** add a Markdown-only skill under `.claude/skills/` — no `search.py`, no exit code. Define its own fallback chain, normalize results into the same result record as CLI adapters, and register it in both `search-queries.md`'s source table and `trip-scraper`'s fan-out step. If it covers more than one vertical, register it in each vertical's fan-out list and follow the "Vertical selection" rule rather than restating it. Verify any URL grammar against the live site, record the date, and mark unverified tokens as such — `BACKLOG.md` item 11 explains why this date is the only freshness signal available.
+**Browser-driven source:** add a Markdown-only skill under `.claude/skills/` — no `search.py`, no exit code. Define its own fallback chain, normalize results into the same result record as CLI adapters, and register it in both `search-queries.md`'s source table and `trip-scraper`'s fan-out step. If it covers more than one vertical, register it in each vertical's fan-out list and follow the "Vertical selection" rule rather than restating it. Verify any URL grammar against the live site, record the date, and mark unverified tokens as such — [issue #9](https://github.com/mathiasesn/ai-holiday-search/issues/9) explains why this date is the only freshness signal available.
 
 ---
 
@@ -234,7 +233,7 @@ This is **distinct from** the "normalized candidate record" that `trip-scraper` 
 
 The repo is split into **tracked framework content** and **untracked personal data**, and this split is enforced by tooling, not trust.
 
-**Tracked (safe to commit):** `CLAUDE.md`, `ARCHI.md`, `README.md`, `SETUP.md`, `BACKLOG.md`, everything under `.claude/commands/`, `.claude/skills/`, `.agents/skills/`, `tools/`, `.github/`, `pyproject.toml`, `uv.lock`, `.mcp.json`, `trip_tracker.csv.example`, and the `.gitkeep` / `documents/README.md` scaffolding placeholders.
+**Tracked (safe to commit):** `CLAUDE.md`, `ARCHI.md`, `README.md`, `SETUP.md`, everything under `.claude/commands/`, `.claude/skills/`, `.agents/skills/`, `tools/`, `.github/`, `pyproject.toml`, `uv.lock`, `.mcp.json`, `trip_tracker.csv.example`, and the `.gitkeep` / `documents/README.md` scaffolding placeholders.
 
 **Gitignored (never commit):** `profile/`, `itineraries/*`, `watchlist/*`, `trip_scraper/*`, `trip_tracker.csv`, the contents of `documents/past-trips/` and `documents/preferences/`, `.env`, `*.key`, `.playwright-mcp/` (Playwright MCP's console logs and page snapshots of real searches, which include the runner's public IP), and `specs/` (via its own `.gitignore` containing `*`).
 
@@ -258,12 +257,12 @@ not traveler data, and must never be merged into the six numbered profile files 
 2. **No tracked file under a personal path** — asks git directly rather than restating `.gitignore` prefixes.
 3. **`.gitignore` coverage** — probes representative sample paths (`profile/some-file.md`, `.env`, …) via `git check-ignore`.
 
-**Two git subtleties in `tools/_repo.py` that you must not undo** (both were real bugs, documented in `BACKLOG.md` item 1):
+**Two git subtleties in `tools/_repo.py` that you must not undo** (both were real bugs, documented in [issue #1](https://github.com/mathiasesn/ai-holiday-search/issues/1)):
 
 - `ignored_paths(..., no_index=True)` is **required** when asking about *tracked* paths. Without `--no-index`, `git check-ignore` reports nothing for a tracked file (tracking beats `.gitignore`), so the leak check would pass unconditionally and catch nothing — which is exactly the leak it exists to catch.
 - `git check-ignore -v` reports the **last** matching pattern, *including negations*. `ignored_paths` skips patterns starting with `!`, otherwise every deliberately-tracked `.gitkeep` and `documents/README.md` is misreported as a leak.
 
-Guards currently run in CI only, i.e. after a leak has already reached the remote. Installing them as a pre-commit hook is `BACKLOG.md` item 2.
+Guards currently run in CI only, i.e. after a leak has already reached the remote. Installing them as a pre-commit hook is [issue #2](https://github.com/mathiasesn/ai-holiday-search/issues/2).
 
 Per `CLAUDE.md`: **never `git add -A` in this repo.** Check `git status` first and flag anything that looks personal before staging.
 
@@ -342,7 +341,7 @@ Both are versioned with `schema_version: 1` and are defined authoritatively in t
 - **Adding a search source** → §8, "Adding a new source". Never add a shared import under `.agents/skills/`.
 - **Adding a slash command** → new `.md` in `.claude/commands/` with a non-empty `description` in frontmatter; state inputs, "State touched", and numbered steps, matching the existing files' shape.
 - **Adding a skill** → new directory under `.claude/skills/` containing `SKILL.md` whose frontmatter `name` matches the directory name.
-- **Changing a shared schema** → edit the one authoritative file (§5.6) and update the summaries pointing at it. Nothing currently verifies command-vs-skill schema agreement (`BACKLOG.md` item 3), so this is manual and easy to drift.
+- **Changing a shared schema** → edit the one authoritative file (§5.6) and update the summaries pointing at it. Nothing currently verifies command-vs-skill schema agreement ([issue #3](https://github.com/mathiasesn/ai-holiday-search/issues/3)), so this is manual and easy to drift.
 - **Changing behavioral rules** → those live in `CLAUDE.md` and the holiday-planner files, not here.
 - **Before committing** → run both `tools/` scripts, and `git status` before staging. Never `git add -A`.
 
@@ -355,7 +354,7 @@ Non-negotiables — an agent working in this repo must not violate these:
 - **Never commit personal data.** `profile/`, `itineraries/`, `watchlist/`, `trip_scraper/`, `trip_tracker.csv`, `documents/` contents, `.env`. Check `git status` before staging; never `git add -A`.
 - **Never plan against the tracked templates.** If `profile/` is missing or still has `<!-- FILL IN -->` markers, stop and tell the user to run `/setup`.
 - **The adapter exit-code protocol is load-bearing.** Exit 2 means "no credentials, fall back to web search," not failure. The exact no-credentials JSON shape is identical across all adapters and is CI-enforced. It binds every `.agents/skills/*` CLI adapter; browser-driven sources are exempt and carry their own fallback chain instead (§8 carve-out) — that exemption is not a licence to weaken it for adapters.
-- **Adapter duplication is deliberate.** Do not extract `.agents/skills/_common.py` — it breaks the copy-a-folder fork workflow. See `BACKLOG.md` item 7 before touching this.
+- **Adapter duplication is deliberate.** Do not extract `.agents/skills/_common.py` — it breaks the copy-a-folder fork workflow. See [issue #17](https://github.com/mathiasesn/ai-holiday-search/issues/17) before touching this.
 - **Adapters must stay standalone.** Keep the PEP 723 header accurate and never import from `tools/` or across skill folders.
 - **Never leak credentials into output.** Errors report exception class names, not messages containing request details.
 - **`/plan`'s 7 steps run in order, and step 6 verification can reject.** The reviewer subagent must get fresh context with no sight of the planning conversation.
