@@ -1,7 +1,7 @@
 # 01 — Traveler Profile
 
 > This is a generic tracked template. `/setup` writes your filled-in personal copy to
-> `profile/01-traveler-profile.md` (gitignored). If that file exists, **it wins** — read it
+> `<DATA_ROOT>/profile/01-traveler-profile.md`. If that file exists, **it wins** — read it
 > instead of this one. Values below are illustrative examples only, not real data.
 
 ## Who's traveling

@@ -21,7 +21,7 @@ structured and paced, how budgets are verified, and how packing/prep checklists 
 ## When to invoke this skill
 
 - `/setup` — to know what fields the traveler profile and travel style need, and to write the
-  filled personal copies to `profile/`.
+  filled personal copies to `<DATA_ROOT>/profile/`.
 - `/scrape` — to score and rank candidate trips against the traveler's profile and style.
 - `/plan` — to evaluate fit, draft the itinerary, enforce pacing rules, verify the budget, and
   generate a packing list.
@@ -31,9 +31,9 @@ structured and paced, how budgets are verified, and how packing/prep checklists 
 
 Each of the six numbered files below is a **generic tracked template** with real structure and
 `<!-- FILL IN -->` markers. `/setup` writes the traveler's filled-in personal copy to
-`profile/<same-filename>` (gitignored). **When a filled copy exists in `profile/`, it always
-wins over the template here** — read `profile/` first and fall back to these templates only if
-`profile/` is empty or missing.
+`<DATA_ROOT>/profile/<same-filename>`. **When a filled copy exists in `<DATA_ROOT>/profile/`, it always
+wins over the template here** — read `<DATA_ROOT>/profile/` first and fall back to these templates only if
+`<DATA_ROOT>/profile/` is empty or missing.
 
 ## Reference index
 

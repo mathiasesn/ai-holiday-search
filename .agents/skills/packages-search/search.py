@@ -35,7 +35,7 @@ messages.
 
 Result record: source, title, url, price, currency, price_per_person, dates
 (depart/return), details (free-form, operator-specific). Authoritative shape:
-.claude/skills/trip-scraper/SKILL.md ("Adapter result record").
+skills/trip-scraper/SKILL.md ("Adapter result record").
 """
 import argparse
 import json

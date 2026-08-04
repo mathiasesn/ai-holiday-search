@@ -23,7 +23,7 @@ run** — out of scope per the spec.
 ## Vertical selection
 
 Which of the three verticals run is **query-driven, not always-on** — the rule is authoritative
-in `.claude/skills/trip-scraper/SKILL.md` ("Vertical selection"); do not restate it here. This
+in `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md` ("Vertical selection"); do not restate it here. This
 skill's obligation under it: run only the verticals it was asked for, and name which ones ran.
 
 The three verticals share **one browser session and one permission/connection check per run**
@@ -37,11 +37,11 @@ no JS dialogs, etc.) applies as usual; the one skill-specific rule is: after 2-3
 tool failures on any step, stop retrying and drop to that vertical's fallback chain below.
 
 Either driver can run this skill's flights/stays/packages procedures unchanged. The two-driver
-model lives once in `.claude/skills/trivago-search/SKILL.md` ("Driver model") and applies here
+model lives once in `<FRAMEWORK_ROOT>/skills/trivago-search/SKILL.md` ("Driver model") and applies here
 unchanged — read it there; this file does not restate any part of it. This
 skill's own attended-only fallback step is step 7 below ("ask the user to paste listing text");
 unattended, the substitute is the terminal outcome authoritatively defined in
-`.claude/skills/price-watch/SKILL.md` ("Re-check procedure").
+`<FRAMEWORK_ROOT>/skills/price-watch/SKILL.md` ("Re-check procedure").
 
 ## Privacy hazard — read before driving any form
 
@@ -152,7 +152,7 @@ https://www.momondo.dk/hotel-search/Lissabon,Lissabon,Portugal-p178681/2026-09-1
 trivago's `locationId`. Never fabricate one. `ucs=` is an opaque session token — unverified,
 never fabricate it either. `;map` opens the map pane. Once observed for a destination this URL
 may be reused as a fast path later in the same run, exactly like trivago's locationId capture
-rule — this is in-conversation only, never written to `profile/`.
+rule — this is in-conversation only, never written to `<DATA_ROOT>/profile/`.
 
 **Disambiguation hazard (verified):** typing a city name can resolve to the *airport* instead of
 the city — the verification run resolved "Lissabon" to `Lissabon Humberto Delgado Lufthavn
@@ -233,7 +233,7 @@ headline maps to a different field in each vertical.
 ## Normalization
 
 This skill does not define the adapter result record, the normalized candidate record, or
-`trip_scraper/seen.json` — `.claude/skills/trip-scraper/SKILL.md` is authoritative for all
+`<DATA_ROOT>/trip_scraper/seen.json` — `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md` is authoritative for all
 three; read it for the full shapes and the dedupe/collapsing rules. Only momondo-specific
 mappings are given here:
 
@@ -244,7 +244,7 @@ mappings are given here:
 - `price_per_person`: present wherever the card shows a per-person figure, with the divisor
   stated explicitly (adult count used in the search) — never left implied.
 - `currency`: `"DKK"` — what the page reads. Per
-  `.claude/skills/holiday-planner/05-budget-rules.md` (EUR primary, DKK noted), also present a
+  `<FRAMEWORK_ROOT>/skills/holiday-planner/05-budget-rules.md` (EUR primary, DKK noted), also present a
   EUR-converted figure and label it a **conversion estimate** (rate not pinned to a live source),
   on top of the web-read-estimate label below.
 - `dates`: `{"depart": "<YYYY-MM-DD>", "return": "<YYYY-MM-DD>"}` for flights and packages;
@@ -266,7 +266,7 @@ mappings are given here:
 the same property or flight is surfaced by more than one source, present **one row per source**,
 each with its own price and `source`, visibly linked/marked as the same underlying item, with the
 price gap noted as further evidence all figures are estimates. Score and rank the item **once**,
-using the lowest of the quoted prices — see `.claude/skills/trip-scraper/SKILL.md` for the shared
+using the lowest of the quoted prices — see `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md` for the shared
 candidate record this relies on.
 
 ## Fallback chain
@@ -296,7 +296,7 @@ Then, in order, for the affected vertical only:
    skill distinguishes provenance).
 7. **Final fallback: ask the user to paste listing text** (a specific flight/hotel/package page,
    email, or screenshot-derived text), per `CLAUDE.md`'s paste-anything fallback and
-   `.claude/skills/trip-scraper/SKILL.md`'s "Paste-a-listing fallback" section — this enters the
+   `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md`'s "Paste-a-listing fallback" section — this enters the
    same normalize → dedupe → score pipeline as any other candidate, but takes `"source":
    "pasted"`, **not** `"momondo-search"` (per that section; `source` feeds the dedupe key hash).
    **Attended-only** — see the "Driver model" section above for the unattended substitute.

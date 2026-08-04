@@ -77,7 +77,7 @@ bot challenge, consent wall, or disambiguation prompt, so the attended tail of t
 chain below — step 8 and the disambiguation step 4 — is unavailable. The authoritative
 definition of the resulting terminal outcome (fall through to web search, then record an
 unverified `price_history` entry, reported distinctly from a genuine sold-out) lives in
-`.claude/skills/price-watch/SKILL.md`'s re-check procedure — this skill follows it rather than
+`<FRAMEWORK_ROOT>/skills/price-watch/SKILL.md`'s re-check procedure — this skill follows it rather than
 restating the entry shape, which is that file's to change. One trivago-specific note: an ambiguous destination with
 no known `locationId` in hand cannot be resolved unattended and takes that same terminal outcome
 rather than guessing among the candidates.
@@ -101,7 +101,7 @@ already in hand (see "Fast path" below).
    every field explicitly rather than trusting what's prefilled — never submit on the assumption
    a field already holds the right value. Never copy any recently-viewed property, prefilled
    form value, or other observed account/browsing-history artifact into `details`, into any
-   result record, or into presented output — this holds even though `trip_scraper/` is
+   result record, or into presented output — this holds even though `<DATA_ROOT>/trip_scraper/` is
    gitignored; the hazard is exposure to the user's own session, not git tracking.
 4. Type the destination into the search field. This opens an autocomplete dropdown — **you
    must click a suggestion; typing and submitting without clicking is not a valid search.**
@@ -113,7 +113,7 @@ already in hand (see "Fast path" below).
    Once resolved, record the destination's `locationId` (see URL grammar below) for the
    remainder of this run, so any additional destinations already resolved this run can use the
    fast path below instead of repeating disambiguation. This is in-conversation only — still no
-   writing to `profile/`.
+   writing to `<DATA_ROOT>/profile/`.
 5. Selecting the destination auto-opens the date picker (two months shown side by side, `<`/`>`
    to page). Click the check-in day, then the check-out day.
 6. That auto-opens the Guests and rooms panel: Adults / Children / Rooms steppers and a "Pet
@@ -126,7 +126,7 @@ already in hand (see "Fast path" below).
 
 Skip the form only when the numeric `locationId` for the destination is already known — either
 from earlier in this conversation (see "capture" note above), or already recorded by the
-traveler in `profile/search-queries.md` (gitignored — it may not exist in a fresh clone; read
+traveler in `<DATA_ROOT>/profile/search-queries.md` (gitignored — it may not exist in a fresh clone; read
 it, never write it). Never fabricate a `locationId` — a wrong one silently returns the wrong
 city. If the ID is not known, use the form path; if the user wants the discovered ID
 persisted, tell them to add it via `/setup`.
@@ -192,7 +192,7 @@ primary price.
 ## Normalization
 
 This skill does not define the adapter result record, the normalized candidate record, or
-`trip_scraper/seen.json` — `.claude/skills/trip-scraper/SKILL.md` is authoritative for all
+`<DATA_ROOT>/trip_scraper/seen.json` — `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md` is authoritative for all
 three; read it for the full shapes and the dedupe rules, plus the cross-source duplicate
 presentation rule (one row per source, score-once) for when the same property also surfaces via
 another enabled source. Only the trivago-specific field mappings are given here:
@@ -202,7 +202,7 @@ another enabled source. Only the trivago-specific field mappings are given here:
 - `price`: the **stay total**, read from the "kr N total" line (see price trap above) — never
   the per-night headline number.
 - `currency`: `"DKK"` — what the page reads. Per
-  `.claude/skills/holiday-planner/05-budget-rules.md` (EUR primary, DKK noted), also present a
+  `<FRAMEWORK_ROOT>/skills/holiday-planner/05-budget-rules.md` (EUR primary, DKK noted), also present a
   EUR-converted figure and label it a **conversion estimate** (rate not pinned to a live source)
   on top of the existing web-read-estimate label.
 - `price_per_person`: the stay total (`price` above) divided by the adult count used in the
@@ -241,7 +241,7 @@ Then, in order:
    if the orchestrating skill distinguishes provenance).
 8. **Final fallback: ask the user to paste listing text** (a specific hotel page, email, or
    screenshot-derived text), per `CLAUDE.md`'s paste-anything fallback and
-   `.claude/skills/trip-scraper/SKILL.md`'s "Paste-a-listing fallback" section — this enters the
+   `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md`'s "Paste-a-listing fallback" section — this enters the
    same normalize → dedupe → score pipeline as any other candidate, but takes `"source":
    "pasted"`, **not** `"trivago-search"` (per that section; `source` feeds the dedupe key hash).
    **Attended-only** — there is no user to ask on an unattended run; see "Unattended terminal

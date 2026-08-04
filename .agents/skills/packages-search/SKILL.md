@@ -47,7 +47,7 @@ plain text).
 Each result has `source`, `title`, `url`, `price`, `currency`, `price_per_person`,
 `dates` (`{depart, return}`), and free-form `details` (whatever your `parse_results()`
 fork leaves beyond the normalized core fields). See
-`.claude/skills/trip-scraper/SKILL.md` ("Adapter result record") for the authoritative
+`skills/trip-scraper/SKILL.md` ("Adapter result record") for the authoritative
 field-by-field definition, shared across all three `.agents/skills/*` adapters.
 `--json` with no matches, or with no operator configured, prints `[]` /
 `{"results": []}` respectively.
@@ -61,7 +61,7 @@ a network call. It prints a machine-readable status and exits **2**:
 {"status": "no_credentials", "reason": "no_operator_configured", "message": "...", "fallback": "web_search", "results": []}
 ```
 
-This is the adapter no-credentials protocol — see `.claude/skills/trip-scraper/SKILL.md` for the
+This is the adapter no-credentials protocol — see `skills/trip-scraper/SKILL.md` for the
 authoritative shape shared by all three adapters. Callers (e.g. `/scrape`) should treat exit code
 `2` as "no local operator configured
 — use Claude web search + paste-a-listing for package holidays instead of failing the

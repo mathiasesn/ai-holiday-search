@@ -1,7 +1,7 @@
 # 02 — Travel Style
 
 > This is a generic tracked template. `/setup` writes your filled-in personal copy to
-> `profile/02-travel-style.md` (gitignored). If that file exists, **it wins** — read it
+> `<DATA_ROOT>/profile/02-travel-style.md`. If that file exists, **it wins** — read it
 > instead of this one. Values below are illustrative examples only, not real data.
 
 ## Trip type preference
