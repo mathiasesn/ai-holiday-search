@@ -33,6 +33,33 @@ jobs:
       - name: Run security guards
         run: uv run python tools/security_guards.py
 
+  clone-symlink-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Prove the .claude/commands and .claude/skills symlinks survive an
+      # actual `git clone` round trip (not merely that they exist in the
+      # working tree checked out by actions/checkout), since that's exactly
+      # what protects clone mode from silently regressing into duplicated
+      # files for anyone who forks/clones the repo.
+      - name: Clone the checkout and verify symlinks
+        run: |
+          set -e
+          git clone "$PWD" /tmp/clone-test
+          for link in .claude/commands .claude/skills; do
+            if [ ! -L "/tmp/clone-test/$link" ]; then
+              echo "FAILED: $link is not a symlink after clone"
+              exit 1
+            fi
+          done
+          test "$(readlink /tmp/clone-test/.claude/commands)" = "../commands"
+          test "$(readlink /tmp/clone-test/.claude/skills)" = "../skills"
+          test -f /tmp/clone-test/.claude/commands/plan.md
+          test -f /tmp/clone-test/.claude/skills/holiday-planner/SKILL.md
+          echo "OK: symlinks resolved correctly after clone"
+
   adapter-smoke:
     runs-on: ubuntu-latest
     strategy:

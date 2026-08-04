@@ -6,10 +6,15 @@ Checks (stdlib only):
      `AMADEUS_API_SECRET=<value>`, private keys, .env-style assignments), with
      an allowlist for the documented env-var NAMES appearing in docs (e.g.
      `AMADEUS_API_KEY` mentioned in a SKILL.md without a real value attached).
-  2. `.gitignore` exists and covers each personal path (`profile/`,
-     `itineraries/`, `watchlist/`, `trip_scraper/`, `trip_tracker.csv`,
-     `documents/` contents, `.env`) — verified via `git check-ignore` on
-     representative sample paths.
+  2. Clone-mode `.gitignore` coverage: `.gitignore` exists and covers each
+     personal path (`profile/`, `itineraries/`, `watchlist/`, `trip_scraper/`,
+     `trip_tracker.csv`, `documents/` contents, `.env`) — verified via
+     `git check-ignore` on representative sample paths. This check is scoped
+     to clone mode on purpose: in plugin mode, personal data is written under
+     `~/.ai-holiday-search`, entirely outside any git repository, so there is
+     no `.gitignore` for it to cover and no equivalent check is meaningful
+     there. It is NOT a no-op — it still fails if THIS repo's `.gitignore`
+     (the one clone-mode users rely on) stops covering any personal path.
   3. No tracked file lives under those personal paths.
 
 Exit 0 on success; non-zero with actionable messages on failure.
@@ -143,6 +148,13 @@ def check_personal_paths_not_tracked(tracked_files, errors):
 
 
 def check_gitignore_coverage(errors):
+    """Clone-mode only: this repo's `.gitignore` must keep covering the
+    personal paths for anyone who forks/clones it and runs the framework
+    in-place. Plugin-mode installs write personal data to
+    `~/.ai-holiday-search`, outside any git repo, so there is nothing for a
+    `.gitignore` to cover there — that mode needs no equivalent check, and
+    deliberately has none. This check must still fail loudly if this repo's
+    own `.gitignore` regresses."""
     gitignore_path = f"{REPO_ROOT}/.gitignore"
 
     if not os.path.isfile(gitignore_path):
