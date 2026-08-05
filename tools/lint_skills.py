@@ -770,9 +770,16 @@ def check_mcp_consistency(mcp, plugin, errors):
     errors.append("plugin.json: 'mcpServers' is neither a string nor an object")
 
 
+BULLET_BACKTICK_PATH_RE = re.compile(r"`([^`]+)`")
+
+
 def check_reset_protect_list(reset_text, errors):
     """Every `<FRAMEWORK_ROOT>`-rooted path in commands/reset.md's
-    protect-list must actually exist on disk."""
+    protect-list must actually exist on disk, and every bullet in that
+    section must be `<FRAMEWORK_ROOT>`-rooted — this is an execution-time
+    guard read by an agent with no doc-relative base, so a doc-relative
+    entry (`../tools/`, a bare `tools/`, or a `[text](../README.md)` link)
+    is a bug, not a style nit."""
     if reset_text is None:
         errors.append("commands/reset.md: file does not exist (cannot check protect-list)")
         return
@@ -791,6 +798,30 @@ def check_reset_protect_list(reset_text, errors):
                 f"commands/reset.md: protect-list path does not exist: '<FRAMEWORK_ROOT>/{remainder}' "
                 f"(resolved to {os.path.relpath(resolved, REPO_ROOT)})"
             )
+
+    # Every bullet line's backticked spans and Markdown link targets must be
+    # `<FRAMEWORK_ROOT>`-rooted. Restricted to bullet lines (`- ...`) so this
+    # never flags the section's explanatory prose paragraphs.
+    for line in block.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("- "):
+            continue
+        for m in BULLET_BACKTICK_PATH_RE.finditer(line):
+            path = m.group(1)
+            if "/" not in path and "." not in path:
+                continue
+            if not path.startswith("<FRAMEWORK_ROOT>"):
+                errors.append(
+                    f"commands/reset.md: protect-list entry is not <FRAMEWORK_ROOT>-rooted: `{path}` "
+                    "(execution-time guard has no doc-relative base; use `<FRAMEWORK_ROOT>/...`)"
+                )
+        for m in MD_LINK_RE.finditer(line):
+            target = m.group(1)
+            if not target.startswith("<FRAMEWORK_ROOT>"):
+                errors.append(
+                    f"commands/reset.md: protect-list entry is not <FRAMEWORK_ROOT>-rooted: "
+                    f"[{target}] link (execution-time guard has no doc-relative base; use `<FRAMEWORK_ROOT>/...`)"
+                )
 
 
 def main():

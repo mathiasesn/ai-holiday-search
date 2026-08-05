@@ -66,15 +66,15 @@ These paths are never deletion targets under any mode of this command, regardles
 line refer back to it rather than restating it:
 
 - `<FRAMEWORK_ROOT>/.claude/`
-- `../.agents/skills/`
-- `../commands/`
-- `../skills/`
-- `../tools/`
-- `../.github/`
-- `../.claude-plugin/`
-- `../pyproject.toml`
-- `../trip_tracker.csv.example`
-- [../README.md](../README.md), [../SETUP.md](../SETUP.md), [../ARCHI.md](../ARCHI.md), [../AGENTS.md](../AGENTS.md)
+- `<FRAMEWORK_ROOT>/.agents/skills/`
+- `<FRAMEWORK_ROOT>/commands/`
+- `<FRAMEWORK_ROOT>/skills/`
+- `<FRAMEWORK_ROOT>/tools/`
+- `<FRAMEWORK_ROOT>/.github/`
+- `<FRAMEWORK_ROOT>/.claude-plugin/`
+- `<FRAMEWORK_ROOT>/pyproject.toml`
+- `<FRAMEWORK_ROOT>/trip_tracker.csv.example`
+- `<FRAMEWORK_ROOT>/README.md`, `<FRAMEWORK_ROOT>/SETUP.md`, `<FRAMEWORK_ROOT>/ARCHI.md`, `<FRAMEWORK_ROOT>/AGENTS.md`
 
 **Clone mode makes this list load-bearing, not redundant.** In clone mode `FRAMEWORK_ROOT ==
 DATA_ROOT == the repo root`, so "delete only under `<DATA_ROOT>`" is trivially true of every file
