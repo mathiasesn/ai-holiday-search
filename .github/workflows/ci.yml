@@ -4,14 +4,6 @@ on:
   push:
   pull_request:
 
-# The adapters' no-credentials path is only exercised if none of these are set.
-# Kept in one place so a new adapter credential is added once, not per job.
-env:
-  ADAPTER_CRED_VARS: >-
-    AMADEUS_API_KEY AMADEUS_API_SECRET
-    STAYS_API_URL STAYS_API_KEY
-    PACKAGES_API_URL PACKAGES_API_KEY
-
 jobs:
   lint-and-guards:
     runs-on: ubuntu-latest
@@ -33,32 +25,20 @@ jobs:
       - name: Run security guards
         run: uv run python tools/security_guards.py
 
-  clone-symlink-integrity:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       # Prove the .claude/commands and .claude/skills symlinks survive an
       # actual `git clone` round trip (not merely that they exist in the
-      # working tree checked out by actions/checkout), since that's exactly
-      # what protects clone mode from silently regressing into duplicated
-      # files for anyone who forks/clones the repo.
-      - name: Clone the checkout and verify symlinks
+      # working tree checked out by actions/checkout). lint_skills.py itself
+      # now asserts the readlink text, dangling-ness, and non-empty-dir for
+      # these symlinks (tools/lint_skills.py's check_symlink_integrity), so
+      # running it again inside a fresh clone is sufficient — no separate
+      # hardcoded per-file assertions needed here.
+      - name: Clone the checkout and re-run lint inside it
         run: |
           set -e
           git clone "$PWD" /tmp/clone-test
-          for link in .claude/commands .claude/skills; do
-            if [ ! -L "/tmp/clone-test/$link" ]; then
-              echo "FAILED: $link is not a symlink after clone"
-              exit 1
-            fi
-          done
-          test "$(readlink /tmp/clone-test/.claude/commands)" = "../commands"
-          test "$(readlink /tmp/clone-test/.claude/skills)" = "../skills"
-          test -f /tmp/clone-test/.claude/commands/plan.md
-          test -f /tmp/clone-test/.claude/skills/holiday-planner/SKILL.md
-          echo "OK: symlinks resolved correctly after clone"
+          cd /tmp/clone-test
+          uv sync
+          uv run python tools/lint_skills.py
 
   adapter-smoke:
     runs-on: ubuntu-latest
@@ -73,6 +53,14 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+
+      # tools/_repo.py's ADAPTER_CRED_VARS is the single source of truth for
+      # this list — derive it here instead of hardcoding it a second time,
+      # so a new adapter credential is added once, not per job/file.
+      - name: Load adapter credential var list
+        run: |
+          vars="$(cd tools && uv run python -c "from _repo import ADAPTER_CRED_VARS; print(' '.join(ADAPTER_CRED_VARS))")"
+          echo "ADAPTER_CRED_VARS=$vars" >> "$GITHUB_ENV"
 
       # `uv run --python X` downloads X on demand and exits non-zero if it
       # cannot honor the request, so it needs no separate install step and
@@ -96,6 +84,11 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+
+      - name: Load adapter credential var list
+        run: |
+          vars="$(cd tools && uv run python -c "from _repo import ADAPTER_CRED_VARS; print(' '.join(ADAPTER_CRED_VARS))")"
+          echo "ADAPTER_CRED_VARS=$vars" >> "$GITHUB_ENV"
 
       # Every adapter must survive the documented copy-a-folder fork workflow,
       # so copy each one out of the checkout in turn — a broken PEP 723 header

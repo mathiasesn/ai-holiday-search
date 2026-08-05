@@ -24,21 +24,21 @@ import re
 import subprocess
 import sys
 
-from _repo import repo_root, ignored_paths, tracked_files as _tracked_files
+from _repo import (
+    ADAPTER_CRED_VARS,
+    PERSONAL_DIRS,
+    PERSONAL_FILES,
+    repo_root,
+    ignored_paths,
+    tracked_files as _tracked_files,
+)
 
 REPO_ROOT = repo_root()
 
 MAX_SCANNED_FILE_BYTES = 1024 * 1024  # 1 MB; skip larger tracked files (e.g. binaries).
 
 # Env var NAMES that are fine to mention in docs/code as long as no value is attached.
-ALLOWED_ENV_VAR_NAMES = {
-    "AMADEUS_API_KEY",
-    "AMADEUS_API_SECRET",
-    "STAYS_API_KEY",
-    "STAYS_API_URL",
-    "PACKAGES_API_KEY",
-    "PACKAGES_API_URL",
-}
+ALLOWED_ENV_VAR_NAMES = set(ADAPTER_CRED_VARS)
 
 # Secret-shaped patterns: NAME=value or NAME: value where NAME looks like a
 # credential. The value is captured once, quotes and all; callers strip
@@ -82,15 +82,24 @@ def looks_like_placeholder(value):
         return True
     return bool(PLACEHOLDER_PATTERN_RE.match(stripped))
 
-PERSONAL_PATHS = [
-    "profile/some-file.md",
-    "itineraries/some-trip/itinerary.md",
-    "watchlist/some-trip.json",
-    "trip_scraper/seen.json",
-    "trip_tracker.csv",
-    "documents/past-trips/some-file.md",  # representative sample under documents/
-    ".env",
-]
+# Representative sample paths under each shared personal-data name (dirs get
+# one plausible file inside them; PERSONAL_FILES entries are used as-is),
+# plus two paths that aren't part of the shared PERSONAL_DIRS/PERSONAL_FILES
+# constants (documents/ contents and .env).
+_PERSONAL_DIR_SAMPLES = {
+    "profile": "some-file.md",
+    "itineraries": "some-trip/itinerary.md",
+    "watchlist": "some-trip.json",
+    "trip_scraper": "seen.json",
+}
+PERSONAL_PATHS = (
+    [f"{d}/{_PERSONAL_DIR_SAMPLES[d]}" for d in PERSONAL_DIRS]
+    + list(PERSONAL_FILES)
+    + [
+        "documents/past-trips/some-file.md",  # representative sample under documents/
+        ".env",
+    ]
+)
 
 
 def git_ls_files():

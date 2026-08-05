@@ -13,11 +13,11 @@ Checks (stdlib only, no PyYAML):
      and `name` matches its parent directory name.
   2. Every `commands/*.md` has frontmatter with a non-empty `description`.
   3. Every relative Markdown link/reference in those files resolves to an
-     existing path (relative to the linked-from file's directory). Targets
-     containing a `<FRAMEWORK_ROOT>/...` placeholder are checked against the
-     repo root (FRAMEWORK_ROOT == repo root in clone mode); targets
-     containing `<DATA_ROOT>` or any other `<...>` placeholder are runtime
-     paths and are skipped.
+     existing path. A `<FRAMEWORK_ROOT>/...` target resolves against the
+     repo root; a `<DATA_ROOT>` or other `<...>` placeholder is a runtime
+     path and is skipped; every other target — Markdown `[]()` link or
+     backticked literal path alike — resolves against the linked-from
+     file's own directory.
   4. Every `.agents/skills/*/` directory contains both a `SKILL.md` and an
      executable `search.py`.
   5. All five `commands/*.md` carry a byte-identical
@@ -28,11 +28,17 @@ Checks (stdlib only, no PyYAML):
      under `profile/`, `itineraries/`, `watchlist/`, `trip_scraper/`, or
      `trip_tracker.csv`.
   7. `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are
-     valid JSON, declare the same `version`, that version has a matching
-     `CHANGELOG.md` entry, the marketplace plugin entry's `name` matches
-     plugin.json's `name`, and that name is valid kebab-case.
+     valid JSON, declare the same `version` and `description`, that version
+     has a matching `CHANGELOG.md` entry, the marketplace plugin entry's
+     `name` matches plugin.json's `name`, and that name is valid kebab-case.
   8. `.claude/commands` and `.claude/skills` are tracked as git symlinks
-     (mode 120000) resolving to the top-level `commands/`/`skills/` dirs.
+     (mode 120000) resolving to the top-level `commands/`/`skills/` dirs,
+     via a same-machine-relative symlink target text (not absolute).
+  9. `.mcp.json` declares exactly `playwright` / `playwright-headed`, both
+     pinned to the identical `@playwright/mcp@<version>`, consistent with
+     whatever `.claude-plugin/plugin.json` declares for `mcpServers`.
+  10. Every `<FRAMEWORK_ROOT>`-rooted path in `commands/reset.md`'s
+      protect-list actually exists on disk.
 
 Exit 0 on success; non-zero with actionable per-file messages on failure.
 """
@@ -42,7 +48,7 @@ import re
 import subprocess
 import sys
 
-from _repo import repo_root, ignored_paths
+from _repo import ADAPTER_CRED_VARS, PERSONAL_DIRS, PERSONAL_FILES, repo_root, ignored_paths, tracked_modes
 
 REPO_ROOT = repo_root()
 
@@ -56,71 +62,81 @@ BACKTICK_PATH_RE = re.compile(r"`([^`\s]+\.(?:md|py))`")
 # special-cased — new doc notations no longer need a matching lint update.
 LITERAL_PATH_RE = re.compile(r"^[\w./-]+\.(?:md|py)$")
 FRAMEWORK_ROOT_BACKTICK_RE = re.compile(r"^<FRAMEWORK_ROOT>/([\w./-]+\.(?:md|py))$")
+FRAMEWORK_ROOT_PROTECT_RE = re.compile(r"`<FRAMEWORK_ROOT>/([\w./-]+)`")
 PLACEHOLDER_TOKEN_RE = re.compile(r"<[A-Za-z_]+>")
 
 PATH_BLOCK_HEADER = "## Path resolution (framework root and data root)"
+PROTECT_LIST_HEADER = "## Explicit protect-list (never delete)"
 
 
-def find_files(patterns_root, filename):
-    """Yield paths under patterns_root matching exactly `filename`, any depth.
-
-    Prunes symlinked subdirectories during traversal so this never wanders
-    into a `.claude/` alias (or any other symlinked tree) and hands a
-    beyond-a-symlink path to git.
-    """
-    results = []
-    if not os.path.isdir(patterns_root):
+def find_markdown(root, *, name=None, recursive=True):
+    """Return paths under `root` matching `name` exactly (or every `.md`
+    file if `name` is None), pruning symlinked subdirectories so this never
+    wanders into a `.claude/` alias and hands a beyond-a-symlink path to
+    git. `recursive=False` lists only `root`'s immediate children (and
+    refuses a symlinked `root` itself)."""
+    if not os.path.isdir(root):
+        return []
+    if not recursive:
+        if os.path.islink(root):
+            return []
+        results = []
+        for entry in sorted(os.listdir(root)):
+            matched = entry == name if name else entry.endswith(".md")
+            if matched:
+                results.append(os.path.join(root, entry))
         return results
-    for dirpath, dirnames, filenames in os.walk(patterns_root):
+
+    results = []
+    for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
-        if filename in filenames:
-            results.append(os.path.join(dirpath, filename))
+        for fname in filenames:
+            matched = fname == name if name else fname.endswith(".md")
+            if matched:
+                results.append(os.path.join(dirpath, fname))
     return results
 
 
 EXPECTED_COMMAND_NAMES = ("setup", "scrape", "plan", "watch", "reset")
+EXPECTED_AGENTS_SKILLS = ("flights-search", "stays-search", "packages-search")
 
 
-def find_command_files(commands_dir):
-    if not os.path.isdir(commands_dir) or os.path.islink(commands_dir):
-        return []
-    return [
-        os.path.join(commands_dir, name)
-        for name in sorted(os.listdir(commands_dir))
-        if name.endswith(".md")
-    ]
-
-
-def find_all_markdown(root_dir):
-    """Yield every `.md` file under root_dir, any depth, pruning symlinked
-    subdirectories (same rationale as find_files)."""
-    results = []
-    if not os.path.isdir(root_dir):
-        return results
-    for dirpath, dirnames, filenames in os.walk(root_dir):
-        dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
-        for name in filenames:
-            if name.endswith(".md"):
-                results.append(os.path.join(dirpath, name))
-    return results
-
-
-def parse_frontmatter(path, errors):
-    """Hand-rolled minimal YAML frontmatter parser: returns dict of top-level
-    scalar string keys, or None if no frontmatter block is present.
-
-    Only handles simple `key: value` pairs (values may be quoted). Good enough
-    for the flat frontmatter used by SKILL.md / command files in this repo.
-    """
+def load_json(path, errors):
+    """Read and parse `path` as JSON exactly once, appending an error and
+    returning None on a missing file or invalid JSON."""
+    rel = os.path.relpath(path, REPO_ROOT)
+    if not os.path.isfile(path):
+        errors.append(f"{rel}: file does not exist")
+        return None
     with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
+        try:
+            return json.load(f)
+        except json.JSONDecodeError as e:
+            errors.append(f"{rel}: invalid JSON: {e}")
+            return None
 
+
+def parse_frontmatter(text, rel, errors):
+    """Hand-rolled minimal YAML frontmatter parser.
+
+    Returns `(fm, body, body_start)`: `fm` is a dict of top-level scalar
+    string keys (or None if no frontmatter block is present), `body` is the
+    text after the closing `---`, and `body_start` is the char offset in
+    `text` where `body` begins (0 when there is no frontmatter) — this lets
+    callers blank out exactly the frontmatter span for other scans without a
+    second scanner.
+
+    Only handles simple `key: value` pairs (values may be quoted). Good
+    enough for the flat frontmatter used by SKILL.md / command files here.
+    Pass a throwaway list as `errors` to suppress malformed-line reporting
+    (e.g. for files where frontmatter is optional and not being validated).
+    """
     if not text.startswith("---"):
-        return None, text
+        return None, text, 0
 
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
-        return None, text
+        return None, text, 0
 
     end_idx = None
     for i in range(1, len(lines)):
@@ -128,10 +144,9 @@ def parse_frontmatter(path, errors):
             end_idx = i
             break
     if end_idx is None:
-        return None, text
+        return None, text, 0
 
     fm = {}
-    rel = os.path.relpath(path, REPO_ROOT)
     last_key = None
     for offset, line in enumerate(lines[1:end_idx]):
         line_no = offset + 2  # 1-indexed, line 1 is the opening '---'
@@ -152,24 +167,13 @@ def parse_frontmatter(path, errors):
             continue
         errors.append(f"{rel}:{line_no}: malformed frontmatter line (not 'key: value', a comment, blank, or a continuation): {stripped!r}")
 
-    body = "\n".join(lines[end_idx + 1 :])
-    return fm, body
+    body = "\n".join(lines[end_idx + 1:])
+    keepend_lines = text.splitlines(keepends=True)
+    body_start = sum(len(l) for l in keepend_lines[: end_idx + 1])
+    return fm, body, body_start
 
 
-def check_frontmatter_file(path, errors, required_keys):
-    """Validate a file's frontmatter has non-empty values for `required_keys`.
-
-    If `name` is among the required keys, it must also match the parent
-    directory name (SKILL.md convention). Used for both SKILL.md and command
-    files — they differ only in which keys are required.
-    """
-    fm, body = parse_frontmatter(path, errors)
-    rel = os.path.relpath(path, REPO_ROOT)
-
-    if fm is None:
-        errors.append(f"{rel}: missing or malformed YAML frontmatter (expected leading '---' block)")
-        return body
-
+def _validate_frontmatter_keys(rel, path, fm, errors, required_keys):
     for key in required_keys:
         value = fm.get(key, "")
         if not value:
@@ -179,92 +183,71 @@ def check_frontmatter_file(path, errors, required_keys):
             if value != dir_name:
                 errors.append(f"{rel}: frontmatter name '{value}' does not match parent directory name '{dir_name}'")
 
-    return body
+
+def resolve_target_path(base_dir, target_path):
+    """Shared resolution model for Markdown `[]()` links and backticked
+    literal paths, keyed on string shape, not markup form: `<FRAMEWORK_ROOT>/...`
+    resolves against the repo root; everything else resolves against the
+    linked-from file's own directory."""
+    if target_path.startswith("<FRAMEWORK_ROOT>/"):
+        remainder = target_path[len("<FRAMEWORK_ROOT>/"):]
+        return os.path.normpath(os.path.join(REPO_ROOT, remainder))
+    return os.path.normpath(os.path.join(base_dir, target_path))
 
 
-def check_links(path, body, errors):
-    rel = os.path.relpath(path, REPO_ROOT)
-    base_dir = os.path.dirname(path)
+def _report_missing(errors, rel, label, target, resolved):
+    if not os.path.exists(resolved):
+        errors.append(f"{rel}: {label}: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
+
+
+def check_links(rel, base_dir, body, errors):
+    """Check Markdown-link and `<FRAMEWORK_ROOT>`-rooted backtick targets
+    immediately. Bare backticked literal-path targets are returned as
+    `(target, resolved)` pairs instead of checked here, so the caller can
+    batch the `.gitignore` exemption lookup (`git check-ignore`) across
+    every file in a single subprocess call rather than one per file."""
+    literal_pairs = []
+
     for match in MD_LINK_RE.finditer(body):
         target = match.group(1).strip()
         # Skip external links, anchors, and mailto/absolute-url schemes.
         if not target or target.startswith("#"):
             continue
-        if URL_SCHEME_RE.match(target):
-            continue
-        if target.startswith("mailto:"):
+        if URL_SCHEME_RE.match(target) or target.startswith("mailto:"):
             continue
         # Strip a trailing #anchor fragment.
         target_path = target.split("#", 1)[0]
         if not target_path:
             continue
-
-        if target_path.startswith("<FRAMEWORK_ROOT>/"):
-            remainder = target_path[len("<FRAMEWORK_ROOT>/") :]
-            resolved = os.path.normpath(os.path.join(REPO_ROOT, remainder))
-        elif PLACEHOLDER_TOKEN_RE.search(target_path):
+        if not target_path.startswith("<FRAMEWORK_ROOT>/") and PLACEHOLDER_TOKEN_RE.search(target_path):
             # <DATA_ROOT>/... (runtime-generated) or any other placeholder
             # notation is not a literal repo path — nothing to check.
             continue
-        else:
-            resolved = os.path.normpath(os.path.join(base_dir, target_path))
+        resolved = resolve_target_path(base_dir, target_path)
+        _report_missing(errors, rel, "relative link target does not exist", target, resolved)
 
-        if not os.path.exists(resolved):
-            errors.append(f"{rel}: relative link target does not exist: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
-
-    literal_targets = []
-    rooted_targets = []  # (original, remainder-relative-to-repo-root)
     for match in BACKTICK_PATH_RE.finditer(body):
         target = match.group(1)
         rooted = FRAMEWORK_ROOT_BACKTICK_RE.match(target)
         if rooted:
-            rooted_targets.append((target, rooted.group(1)))
+            resolved = resolve_target_path(base_dir, target)
+            _report_missing(errors, rel, "backticked <FRAMEWORK_ROOT>-rooted path does not exist", target, resolved)
             continue
         if PLACEHOLDER_TOKEN_RE.search(target):
             # <DATA_ROOT>/... or any other placeholder — runtime path, skip.
             continue
-        # Only validate backticked strings that look like literal
-        # repo-relative paths (word/dot/slash/dash chars, contains a '/',
-        # ends .md/.py). Placeholder notation (`<name>`, `foo/*.md`,
-        # `{a,b}.py`, `...`) doesn't match and is left alone.
+        # Only validate backticked strings that look like literal paths
+        # (word/dot/slash/dash chars, contains '/', ends .md/.py); glob/
+        # placeholder notation (`foo/*.md`, `{a,b}.py`, `...`) is left alone.
         if "/" not in target or not LITERAL_PATH_RE.fullmatch(target):
             continue
-        literal_targets.append(target)
+        resolved = resolve_target_path(base_dir, target)
+        literal_pairs.append((target, resolved))
 
-    for target, remainder in rooted_targets:
-        resolved = os.path.normpath(os.path.join(REPO_ROOT, remainder))
-        if not os.path.exists(resolved):
-            errors.append(f"{rel}: backticked <FRAMEWORK_ROOT>-rooted path does not exist: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
-
-    # Never hand a path under a symlinked directory (e.g. `.claude/...`) to
-    # `git check-ignore` — it errors "beyond a symbolic link" (the same
-    # class of failure this tool's own traversal used to hit). Those paths
-    # are never gitignored anyway, so just check existence directly.
-    checkable_targets = [t for t in literal_targets if not t.startswith(".claude/")]
-    for target in literal_targets:
-        if not target.startswith(".claude/"):
-            continue
-        resolved = os.path.normpath(os.path.join(REPO_ROOT, target))
-        if not os.path.exists(resolved):
-            errors.append(f"{rel}: backticked repo-relative path does not exist: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
-
-    if checkable_targets:
-        ignored = ignored_paths(checkable_targets, root=REPO_ROOT)
-        for target in checkable_targets:
-            # Skip paths under gitignored personal-data dirs — these are
-            # runtime paths written by /setup, /scrape, /watch, /plan, never
-            # tracked in git.
-            if target in ignored:
-                continue
-            resolved = os.path.normpath(os.path.join(REPO_ROOT, target))
-            if not os.path.exists(resolved):
-                errors.append(f"{rel}: backticked repo-relative path does not exist: '{target}' (resolved to {os.path.relpath(resolved, REPO_ROOT)})")
+    return literal_pairs
 
 
-EXPECTED_AGENTS_SKILLS = ("flights-search", "stays-search", "packages-search")
-
-
-def check_discovery_completeness(command_files, skill_files, agents_skills_dir, errors):
+def check_discovery_completeness(command_files, skill_files, adapter_dir_names, errors):
     """Assert the file sets the rest of this script iterates are actually
     populated and complete, so a renamed/missing directory produces a loud
     failure instead of every downstream check silently no-oping over an
@@ -292,31 +275,24 @@ def check_discovery_completeness(command_files, skill_files, agents_skills_dir, 
             "(expected at least one — is skills/ missing or renamed?)"
         )
 
-    if not os.path.isdir(agents_skills_dir):
-        errors.append(f".agents/skills/: directory does not exist")
-    else:
-        found_adapters = {
-            name for name in os.listdir(agents_skills_dir)
-            if os.path.isdir(os.path.join(agents_skills_dir, name))
-        }
-        missing_adapters = [n for n in EXPECTED_AGENTS_SKILLS if n not in found_adapters]
+    # A missing .agents/skills/ directory is reported once, by
+    # check_agents_skills_structure — nothing to do here in that case.
+    if adapter_dir_names is not None:
+        missing_adapters = [n for n in EXPECTED_AGENTS_SKILLS if n not in set(adapter_dir_names)]
         if missing_adapters:
             errors.append(
                 f".agents/skills/: missing expected adapter directory(ies): "
                 f"{', '.join(sorted(missing_adapters))} "
-                f"(found {sorted(found_adapters) or 'none'})"
+                f"(found {sorted(adapter_dir_names) or 'none'})"
             )
 
 
-def check_agents_skills_structure(errors):
-    agents_skills_dir = os.path.join(REPO_ROOT, ".agents", "skills")
-    if not os.path.isdir(agents_skills_dir):
+def check_agents_skills_structure(agents_skills_dir, adapter_dir_names, errors):
+    if adapter_dir_names is None:
         errors.append(".agents/skills/: directory does not exist")
         return
-    for entry in sorted(os.listdir(agents_skills_dir)):
+    for entry in adapter_dir_names:
         entry_path = os.path.join(agents_skills_dir, entry)
-        if not os.path.isdir(entry_path):
-            continue
         rel = os.path.relpath(entry_path, REPO_ROOT)
         skill_md = os.path.join(entry_path, "SKILL.md")
         search_py = os.path.join(entry_path, "search.py")
@@ -328,39 +304,24 @@ def check_agents_skills_structure(errors):
             errors.append(f"{rel}/search.py: not executable (chmod +x)")
 
 
-def check_adapter_contract(errors):
+def check_adapter_contract(agents_skills_dir, adapter_dir_names, errors):
     """Assert the three .agents/skills/*/search.py adapters agree on their
-    no-credentials contract.
-
-    A shared adapter module was deliberately rejected (it would break the
-    documented copy-a-folder fork workflow), so the three adapters stay
-    intentionally near-duplicated. This guards the duplication instead:
-    each adapter's `--json` no-credentials path (run with credentials env
-    vars unset) must exit 2, print exactly one JSON object, and every
-    adapter must agree on the same top-level key set, `status` ==
-    "no_credentials", and `fallback` == "web_search".
-    """
-    agents_skills_dir = os.path.join(REPO_ROOT, ".agents", "skills")
-    if not os.path.isdir(agents_skills_dir):
+    no-credentials contract (a shared module was deliberately rejected, so
+    the near-duplicated adapters are guarded instead of deduplicated): each
+    adapter's `--json` no-credentials path (credential env vars unset) must
+    exit 2, print exactly one JSON object, and every adapter must agree on
+    the same top-level key set, `status` == "no_credentials", and
+    `fallback` == "web_search"."""
+    if adapter_dir_names is None:
         return
 
-    env_vars_to_unset = (
-        "AMADEUS_API_KEY",
-        "AMADEUS_API_SECRET",
-        "STAYS_API_KEY",
-        "STAYS_API_URL",
-        "PACKAGES_API_KEY",
-        "PACKAGES_API_URL",
-    )
-
     contracts = []  # list of (rel, keys_set, status, fallback)
-    for entry in sorted(os.listdir(agents_skills_dir)):
+    for entry in adapter_dir_names:
         search_py = os.path.join(agents_skills_dir, entry, "search.py")
         if not os.path.isfile(search_py):
             continue
         rel = os.path.relpath(search_py, REPO_ROOT)
-
-        env = {k: v for k, v in os.environ.items() if k not in env_vars_to_unset}
+        env = {k: v for k, v in os.environ.items() if k not in ADAPTER_CRED_VARS}
         try:
             result = subprocess.run(
                 [sys.executable, search_py, "--json"],
@@ -409,28 +370,11 @@ def check_adapter_contract(errors):
             errors.append(f"{rel}: no-credentials JSON 'fallback' is {fallback!r}, expected 'web_search'")
 
 
-def _frontmatter_span(text):
-    """Return the (start, end) char offsets of a leading '---' frontmatter
-    block, or None. Used to blank it out for check_no_repo_relative_paths
-    without disturbing line numbers of the rest of the file."""
-    if not text.startswith("---"):
-        return None
-    lines = text.splitlines(keepends=True)
-    if not lines or lines[0].strip() != "---":
-        return None
-    offset = len(lines[0])
-    for line in lines[1:]:
-        offset_end = offset + len(line)
-        if line.strip() == "---":
-            return (0, offset_end)
-        offset = offset_end
-    return None
-
-
-def extract_path_block(text):
-    """Return (block_text, start, end) for the canonical Path-resolution
-    section, or None if the file has no such heading."""
-    idx = text.find(PATH_BLOCK_HEADER)
+def extract_section(text, header):
+    """Return `(block_text, start, end)` for the section starting at the
+    given `## `-style `header` and running until the next `## ` heading (or
+    end of file), or None if `header` isn't present."""
+    idx = text.find(header)
     if idx == -1:
         return None
     rest = text[idx:]
@@ -457,16 +401,14 @@ REQUIRED_PATH_BLOCK_TOKENS = (
 )
 
 
-def check_path_resolution_block(command_files, errors):
+def check_path_resolution_block(command_files, texts, errors):
     """All five commands/*.md must carry a byte-identical
     '## Path resolution (framework root and data root)' block, and that
     block must still mention the essential contract tokens."""
     blocks = {}  # rel -> block text
     for path in command_files:
         rel = os.path.relpath(path, REPO_ROOT)
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read()
-        found = extract_path_block(text)
+        found = extract_section(texts[path], PATH_BLOCK_HEADER)
         if found is None:
             errors.append(f"{rel}: missing '{PATH_BLOCK_HEADER}' section")
             continue
@@ -509,13 +451,19 @@ def check_path_resolution_block(command_files, errors):
 
 CLAUDE_DIR_RE = re.compile(r"\.claude/")
 SEARCH_PY_RE = re.compile(r"\.agents/skills/([^/\s`)]+)/search\.py")
-FRAMEWORK_ROOTED_SEARCH_PY_RE = re.compile(r"<FRAMEWORK_ROOT>/\.agents/skills/[^/\s`)]+/search\.py")
-BARE_PERSONAL_DIR_RE = re.compile(r"\b(profile|itineraries|watchlist|trip_scraper)/")
-BARE_TRIP_TRACKER_RE = re.compile(r"\btrip_tracker\.csv\b(?!\.example)")
+_PERSONAL_DIR_ALT = "|".join(re.escape(d) for d in PERSONAL_DIRS)
+_PERSONAL_FILE_ALT = "|".join(re.escape(f) for f in PERSONAL_FILES)
+# Matches either a bare personal directory reference (`profile/`, ...) or a
+# bare personal filename (`trip_tracker.csv`, not followed by `.example`).
+BARE_PERSONAL_PATH_RE = re.compile(
+    rf"\b(?:({_PERSONAL_DIR_ALT})/|({_PERSONAL_FILE_ALT})\b(?!\.example))"
+)
 # A <DATA_ROOT>/... or <FRAMEWORK_ROOT>/... span is already rooted — blank
 # out just that span (not the whole line) before scanning for bare personal
 # paths, so a rooted mention earlier in a line no longer exempts an
-# unrelated unrooted mention later on the same line.
+# unrelated unrooted mention later on the same line. (Also fully subsumes
+# the narrower "<FRAMEWORK_ROOT>/.agents/skills/*/search.py" case, since its
+# character class already matches that whole span.)
 ROOTED_SPAN_RE = re.compile(r"<(?:DATA_ROOT|FRAMEWORK_ROOT)>/[\w./-]*")
 # An unrooted `skills/...` or `commands/...` reference to a concrete file
 # (ending .md/.py) is a runtime read target that should be rooted at
@@ -536,139 +484,100 @@ def _mask(text, pattern):
     return pattern.sub(lambda m: "#" * len(m.group(0)), text)
 
 
-def check_no_repo_relative_paths(md_files, path_blocks, errors):
+def _rooting_check_claude_dir(m, rel, line_no, line):
+    return f"{rel}:{line_no}: repo-relative reference to '.claude/' — use <FRAMEWORK_ROOT> instead"
+
+
+def _rooting_check_search_py(m, rel, line_no, line):
+    adapter_name = m.group(1)
+    if "*" in adapter_name:
+        return None  # glob prose (e.g. `.agents/skills/*/search.py`), not an invocation
+    return f"{rel}:{line_no}: '.agents/skills/{adapter_name}/search.py' invocation not rooted at <FRAMEWORK_ROOT>"
+
+
+def _rooting_check_personal_path(m, rel, line_no, line):
+    if m.group(1):
+        return f"{rel}:{line_no}: unrooted personal-data path (should be <DATA_ROOT>/...): {line.strip()!r}"
+    return f"{rel}:{line_no}: unrooted 'trip_tracker.csv' reference (should be <DATA_ROOT>/trip_tracker.csv): {line.strip()!r}"
+
+
+def _rooting_check_skills_or_commands(m, rel, line_no, line):
+    return (
+        f"{rel}:{line_no}: unrooted framework-file reference '{m.group(0)}' "
+        f"(should be <FRAMEWORK_ROOT>/{m.group(0)}): {line.strip()!r}"
+    )
+
+
+# One (regex, handler) table drives every "must be rooted at <FRAMEWORK_ROOT>
+# or <DATA_ROOT>" check, so all of them are handled the same way and none
+# needs a bespoke string comparison.
+ROOTING_CHECKS = (
+    (CLAUDE_DIR_RE, _rooting_check_claude_dir),
+    (SEARCH_PY_RE, _rooting_check_search_py),
+    (BARE_PERSONAL_PATH_RE, _rooting_check_personal_path),
+    (UNROOTED_SKILLS_OR_COMMANDS_RE, _rooting_check_skills_or_commands),
+)
+
+
+def check_no_repo_relative_paths(files, errors):
     """No framework Markdown under commands/ or skills/ may reintroduce a
     repo-relative reference to `.claude/`, an unrooted
-    `.agents/skills/*/search.py` invocation, or an unrooted write target
-    under profile/, itineraries/, watchlist/, trip_scraper/,
-    trip_tracker.csv.
+    `.agents/skills/*/search.py` invocation, an unrooted `skills/...`/
+    `commands/...` file reference, or an unrooted write target under
+    profile/, itineraries/, watchlist/, trip_scraper/, trip_tracker.csv.
 
-    Heuristic: only `commands/*.md` and `skills/**/SKILL.md` (not
-    `.agents/skills/`, whose adapters are *designed* to be copied out
-    standalone and legitimately document a bare `.agents/skills/<name>/
-    search.py` CLI invocation for themselves) are scanned. Frontmatter
-    (`description:` legitimately names these six directories in prose) and,
-    for commands/*.md, the canonical "## Path resolution" block (which
-    legitimately lists all six as backticked prose) are blanked out — same
-    line count, so remaining matches still report a useful line number —
-    before scanning. Rather than a line-level exemption (which would let a
-    single unrelated `<DATA_ROOT>` mention anywhere on a line silence every
-    check for that whole line), only the exact `<DATA_ROOT>/xxx` or
-    `<FRAMEWORK_ROOT>/xxx` span is blanked, and a bare repeat of that SAME
-    `xxx` name later on the line is treated as the repo's documented
-    readability convention (root the first mention, then repeat a bare
-    filename for readability, e.g. "Deletes: `<DATA_ROOT>/watchlist/` (all
-    `watchlist/<slug>.json` files)") — a bare mention of a *different*
-    personal-data name on the same line is still flagged.
+    `files` is an iterable of `(path, text, body_start)` — `body_start` is
+    the char offset from `parse_frontmatter` marking where a leading
+    frontmatter block ends (0 if none), blanked out here without a second
+    frontmatter scanner. `.agents/skills/` is deliberately excluded by the
+    caller: those adapters are designed to be copied out standalone and
+    legitimately document a bare `search.py` invocation for themselves.
 
-    Also flags an unrooted `skills/...`/`commands/...` reference to a
-    concrete `.md`/`.py` file (the same unrooted-runtime-target class the
-    refactor left behind for `.agents/skills/*/search.py`).
+    Frontmatter and (for commands/*.md) the canonical "## Path resolution"
+    block legitimately name these directories in prose, so both are blanked
+    to same-length filler (preserving line numbers) before scanning. Every
+    `<DATA_ROOT>/xxx` / `<FRAMEWORK_ROOT>/xxx` span is also blanked (not the
+    whole line) before the bare-path checks run, so a rooted mention earlier
+    on a line never exempts an unrelated bare mention later on it — tested
+    empirically (removing this exemption changes no lint outcome on this
+    repo's current docs) rather than kept as a speculative false-negative.
 
     Known blind spot: this is a textual heuristic, not a parser — it cannot
-    catch a repo-relative reference split across a line wrap, hidden behind
-    an HTML entity, embedded in a fenced code block that itself pastes the
-    block/frontmatter, or a genuinely unrooted personal/framework path that
-    happens to share a line with an unrelated rooted mention of the exact
-    same first path segment (a rare same-name collision, e.g. two different
-    `profile/...` targets on one line where only one is meant to be rooted).
+    catch a reference split across a line wrap, hidden behind an HTML
+    entity, or embedded in a fenced code block pasting the block/frontmatter
+    verbatim.
     """
-    for path in md_files:
+    for path, text, body_start in files:
         rel = os.path.relpath(path, REPO_ROOT)
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read()
 
-        fm_span = _frontmatter_span(text)
-        if fm_span:
-            start, end = fm_span
+        if body_start:
+            text = ("\n" * text[:body_start].count("\n")) + text[body_start:]
+
+        found = extract_section(text, PATH_BLOCK_HEADER)
+        if found is not None:
+            _, start, end = found
             text = text[:start] + ("\n" * text[start:end].count("\n")) + text[end:]
 
-        block = path_blocks.get(path)
-        if block is not None:
-            found = extract_path_block(text)
-            if found is not None:
-                _, start, end = found
-                text = text[:start] + ("\n" * text[start:end].count("\n")) + text[end:]
-
-        masked = _mask(text, FRAMEWORK_ROOTED_SEARCH_PY_RE)
-
-        for line_no, line in enumerate(masked.splitlines(), start=1):
-            # Which directories/files were already rooted on THIS line via a
-            # <DATA_ROOT>/... or <FRAMEWORK_ROOT>/... span (first path
-            # segment after the token, e.g. "watchlist" from
-            # "<DATA_ROOT>/watchlist/", or ".claude" from
-            # "<FRAMEWORK_ROOT>/.claude/"). A bare repeat of that SAME name
-            # later in the line is the repo's documented readability
-            # convention ("<DATA_ROOT>/watchlist/` (all `watchlist/<slug>.json`
-            # files)") and must still pass — but a bare mention of a
-            # DIFFERENT personal-data name on the same line is a genuinely
-            # unrooted path and must still be flagged.
-            rooted_names_on_line = set()
-            for m in ROOTED_SPAN_RE.finditer(line):
-                remainder = m.group(0).split(">/", 1)[1]
-                first_seg = remainder.split("/", 1)[0]
-                if first_seg:
-                    rooted_names_on_line.add(first_seg)
-
-            # Blank out the rooted spans themselves (not the whole line) so
-            # e.g. the "watchlist/" inside "<DATA_ROOT>/watchlist/" (or the
-            # ".claude/" inside "<FRAMEWORK_ROOT>/.claude/") isn't
-            # double-counted as a second, bare match.
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            # Blank out rooted <DATA_ROOT>/... / <FRAMEWORK_ROOT>/... spans
+            # before scanning for bare (unrooted) mentions.
             bare_scan_line = _mask(line, ROOTED_SPAN_RE)
 
-            if CLAUDE_DIR_RE.search(bare_scan_line):
-                errors.append(f"{rel}:{line_no}: repo-relative reference to '.claude/' — use <FRAMEWORK_ROOT> instead")
-            for m in SEARCH_PY_RE.finditer(bare_scan_line):
-                adapter_name = m.group(1)
-                if "*" in adapter_name:
-                    continue  # glob prose (e.g. `.agents/skills/*/search.py`), not an invocation
-                errors.append(f"{rel}:{line_no}: '.agents/skills/{adapter_name}/search.py' invocation not rooted at <FRAMEWORK_ROOT>")
-            for m in BARE_PERSONAL_DIR_RE.finditer(bare_scan_line):
-                if m.group(1) in rooted_names_on_line:
-                    continue
-                errors.append(f"{rel}:{line_no}: unrooted personal-data path (should be <DATA_ROOT>/...): {line.strip()!r}")
-            if "trip_tracker.csv" not in rooted_names_on_line and BARE_TRIP_TRACKER_RE.search(bare_scan_line):
-                errors.append(f"{rel}:{line_no}: unrooted 'trip_tracker.csv' reference (should be <DATA_ROOT>/trip_tracker.csv): {line.strip()!r}")
-            for m in UNROOTED_SKILLS_OR_COMMANDS_RE.finditer(bare_scan_line):
-                errors.append(
-                    f"{rel}:{line_no}: unrooted framework-file reference '{m.group(0)}' "
-                    f"(should be <FRAMEWORK_ROOT>/{m.group(0)}): {line.strip()!r}"
-                )
+            for regex, handler in ROOTING_CHECKS:
+                for m in regex.finditer(bare_scan_line):
+                    msg = handler(m, rel, line_no, line)
+                    if msg:
+                        errors.append(msg)
 
 
 KEBAB_CASE_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
-def check_manifest_consistency(errors):
-    plugin_path = os.path.join(REPO_ROOT, ".claude-plugin", "plugin.json")
-    marketplace_path = os.path.join(REPO_ROOT, ".claude-plugin", "marketplace.json")
+def check_manifest_consistency(plugin, marketplace, errors):
     changelog_path = os.path.join(REPO_ROOT, "CHANGELOG.md")
 
-    plugin = None
-    marketplace = None
-
-    for label, path, holder in (
-        ("plugin.json", plugin_path, "plugin"),
-        ("marketplace.json", marketplace_path, "marketplace"),
-    ):
-        rel = os.path.relpath(path, REPO_ROOT)
-        if not os.path.isfile(path):
-            errors.append(f"{rel}: file does not exist")
-            continue
-        with open(path, "r", encoding="utf-8") as f:
-            raw = f.read()
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as e:
-            errors.append(f"{rel}: invalid JSON: {e}")
-            continue
-        if holder == "plugin":
-            plugin = data
-        else:
-            marketplace = data
-
     if plugin is None or marketplace is None:
-        return
+        return  # already reported by load_json
 
     plugin_name = plugin.get("name")
     plugin_version = plugin.get("version")
@@ -697,6 +606,13 @@ def check_manifest_consistency(errors):
                 f"marketplace.json: plugin entry '{entry.get('name')}' version {entry_version!r} "
                 f"does not match plugin.json's version {plugin_version!r}"
             )
+        entry_desc = entry.get("description")
+        plugin_desc = plugin.get("description")
+        if entry_desc != plugin_desc:
+            errors.append(
+                f"marketplace.json: plugin entry '{entry.get('name')}' description {entry_desc!r} "
+                f"does not match plugin.json's description {plugin_desc!r}"
+            )
 
     if plugin_version:
         if not os.path.isfile(changelog_path):
@@ -713,35 +629,22 @@ def check_symlink_integrity(errors):
     symlinks (mode 120000) resolving to the top-level commands/ and skills/
     directories — this is what keeps clone-mode discovery working instead
     of silently regressing into duplicated files."""
-    expected = {
+    expected_target = {
         ".claude/commands": "commands",
         ".claude/skills": "skills",
     }
+    expected_readlink = {
+        ".claude/commands": "../commands",
+        ".claude/skills": "../skills",
+    }
 
     try:
-        result = subprocess.run(
-            ["git", "ls-files", "-s", *expected.keys()],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-        )
-    except OSError as e:
-        errors.append(f"could not run git ls-files to check symlinks: {e}")
+        modes = tracked_modes(list(expected_target.keys()), root=REPO_ROOT)
+    except RuntimeError as e:
+        errors.append(str(e))
         return
 
-    if result.returncode != 0:
-        errors.append(f"git ls-files -s failed: {result.stderr.strip()}")
-        return
-
-    modes = {}
-    for line in result.stdout.splitlines():
-        # "<mode> <sha> <stage>\t<path>"
-        meta, _, path = line.partition("\t")
-        parts = meta.split()
-        if parts and path:
-            modes[path] = parts[0]
-
-    for rel_link, rel_target in expected.items():
+    for rel_link, rel_target in expected_target.items():
         full_link = os.path.join(REPO_ROOT, rel_link)
         mode = modes.get(rel_link)
         if mode is None:
@@ -753,6 +656,20 @@ def check_symlink_integrity(errors):
         if not os.path.islink(full_link):
             errors.append(f"{rel_link}: not a symlink on disk")
             continue
+
+        # Compare the literal symlink target text, not just where it
+        # resolves to: os.path.realpath on an ABSOLUTE symlink still
+        # resolves "correctly" on the machine that created it, but an
+        # absolute link is broken on a fresh clone elsewhere. Requiring the
+        # relative text catches that locally instead of only via a
+        # separate-clone CI test.
+        actual_readlink = os.readlink(full_link)
+        if actual_readlink != expected_readlink[rel_link]:
+            errors.append(
+                f"{rel_link}: symlink target text is {actual_readlink!r}, expected "
+                f"{expected_readlink[rel_link]!r} (must be a same-machine-relative link, not absolute)"
+            )
+
         resolved = os.path.realpath(full_link)
         expected_resolved = os.path.realpath(os.path.join(REPO_ROOT, rel_target))
         if resolved != expected_resolved:
@@ -775,27 +692,36 @@ def check_symlink_integrity(errors):
 PINNED_PLAYWRIGHT_MCP_RE = re.compile(r"^@playwright/mcp@(?!latest\b)\S+$")
 
 
-def check_mcp_consistency(errors):
+def _pinned_arg(server_name, server_def, errors):
+    args = server_def.get("args") if isinstance(server_def, dict) else None
+    if not isinstance(args, list):
+        errors.append(f".mcp.json: server '{server_name}' has no 'args' list")
+        return None
+    candidates = [a for a in args if isinstance(a, str) and a.startswith("@playwright/mcp")]
+    if len(candidates) != 1:
+        errors.append(
+            f".mcp.json: server '{server_name}' args do not contain exactly one "
+            f"'@playwright/mcp@<version>' entry: {candidates}"
+        )
+        return None
+    pin = candidates[0]
+    if not PINNED_PLAYWRIGHT_MCP_RE.match(pin):
+        errors.append(
+            f".mcp.json: server '{server_name}' uses unpinned/'@latest' playwright mcp "
+            f"version: '{pin}' — pin an exact version"
+        )
+        return None
+    return pin
+
+
+def check_mcp_consistency(mcp, plugin, errors):
     """`.mcp.json` must define exactly `playwright` and `playwright-headed`,
     both pinned to the identical `@playwright/mcp@<version>` package (no
     `@latest`/unpinned form). If `.claude-plugin/plugin.json` also declares
-    `mcpServers`, it must either point at `./.mcp.json` or independently
-    declare the same two server names pinned to the same version, so the
-    two distribution modes cannot silently drift apart."""
-    mcp_path = os.path.join(REPO_ROOT, ".mcp.json")
-    plugin_path = os.path.join(REPO_ROOT, ".claude-plugin", "plugin.json")
-
-    if not os.path.isfile(mcp_path):
-        errors.append(".mcp.json: file does not exist")
-        return
-
-    with open(mcp_path, "r", encoding="utf-8") as f:
-        raw = f.read()
-    try:
-        mcp = json.loads(raw)
-    except json.JSONDecodeError as e:
-        errors.append(f".mcp.json: invalid JSON: {e}")
-        return
+    `mcpServers`, it must point at `./.mcp.json` — an inline object is not
+    supported, so the two distribution modes cannot silently drift apart."""
+    if mcp is None:
+        return  # already reported by load_json
 
     servers = mcp.get("mcpServers")
     if not isinstance(servers, dict):
@@ -810,48 +736,17 @@ def check_mcp_consistency(errors):
             f"{sorted(expected_names)}"
         )
 
-    def _pinned_arg(server_name, server_def):
-        args = server_def.get("args") if isinstance(server_def, dict) else None
-        if not isinstance(args, list):
-            errors.append(f".mcp.json: server '{server_name}' has no 'args' list")
-            return None
-        candidates = [a for a in args if isinstance(a, str) and a.startswith("@playwright/mcp")]
-        if len(candidates) != 1:
-            errors.append(
-                f".mcp.json: server '{server_name}' args do not contain exactly one "
-                f"'@playwright/mcp@<version>' entry: {candidates}"
-            )
-            return None
-        pin = candidates[0]
-        if not PINNED_PLAYWRIGHT_MCP_RE.match(pin):
-            errors.append(
-                f".mcp.json: server '{server_name}' uses unpinned/'@latest' playwright mcp "
-                f"version: '{pin}' — pin an exact version"
-            )
-            return None
-        return pin
-
     pins = {}
     for name in sorted(found_names & expected_names):
-        pin = _pinned_arg(name, servers[name])
+        pin = _pinned_arg(name, servers[name], errors)
         if pin is not None:
             pins[name] = pin
 
     if len(set(pins.values())) > 1:
-        errors.append(
-            f".mcp.json: playwright mcp version pins differ across servers: "
-            f"{ {n: p for n, p in pins.items()} }"
-        )
+        errors.append(f".mcp.json: playwright mcp version pins differ across servers: {pins}")
 
-    mcp_version = next(iter(pins.values()), None)
-
-    if not os.path.isfile(plugin_path):
-        return
-    with open(plugin_path, "r", encoding="utf-8") as f:
-        try:
-            plugin = json.loads(f.read())
-        except json.JSONDecodeError:
-            return  # already reported by check_manifest_consistency
+    if plugin is None:
+        return  # missing/invalid already reported by check_manifest_consistency's load
 
     plugin_mcp = plugin.get("mcpServers")
     if plugin_mcp is None:
@@ -866,70 +761,152 @@ def check_mcp_consistency(errors):
         return
 
     if isinstance(plugin_mcp, dict):
-        plugin_names = set(plugin_mcp.keys())
-        if plugin_names != expected_names:
-            errors.append(
-                f"plugin.json: 'mcpServers' keys {sorted(plugin_names)} do not match "
-                f".mcp.json's {sorted(expected_names)} — the two modes would drift apart"
-            )
-        for name in sorted(plugin_names & expected_names):
-            pin = _pinned_arg(f"plugin.json:{name}", plugin_mcp[name])
-            if pin is not None and mcp_version is not None and pin != mcp_version:
-                errors.append(
-                    f"plugin.json: server '{name}' pins '{pin}', but .mcp.json pins "
-                    f"'{mcp_version}' — plugin and clone mode would use different versions"
-                )
+        errors.append(
+            "plugin.json: 'mcpServers' must delegate to './.mcp.json' — inline mcp server "
+            "definitions are unsupported"
+        )
         return
 
     errors.append("plugin.json: 'mcpServers' is neither a string nor an object")
 
 
+def check_reset_protect_list(reset_text, errors):
+    """Every `<FRAMEWORK_ROOT>`-rooted path in commands/reset.md's
+    protect-list must actually exist on disk."""
+    if reset_text is None:
+        errors.append("commands/reset.md: file does not exist (cannot check protect-list)")
+        return
+
+    found = extract_section(reset_text, PROTECT_LIST_HEADER)
+    if found is None:
+        errors.append(f"commands/reset.md: missing '{PROTECT_LIST_HEADER}' section")
+        return
+
+    block, _, _ = found
+    for m in FRAMEWORK_ROOT_PROTECT_RE.finditer(block):
+        remainder = m.group(1)
+        resolved = os.path.normpath(os.path.join(REPO_ROOT, remainder))
+        if not os.path.exists(resolved):
+            errors.append(
+                f"commands/reset.md: protect-list path does not exist: '<FRAMEWORK_ROOT>/{remainder}' "
+                f"(resolved to {os.path.relpath(resolved, REPO_ROOT)})"
+            )
+
+
 def main():
     errors = []
 
-    top_skill_files = sorted(find_files(os.path.join(REPO_ROOT, "skills"), "SKILL.md"))
-    agents_skill_files = sorted(find_files(os.path.join(REPO_ROOT, ".agents", "skills"), "SKILL.md"))
+    skills_root = os.path.join(REPO_ROOT, "skills")
+    agents_skills_dir = os.path.join(REPO_ROOT, ".agents", "skills")
+    commands_dir = os.path.join(REPO_ROOT, "commands")
+
+    # Walk skills/ exactly once and partition into SKILL.md files vs. other
+    # reference Markdown, instead of walking it twice and set-differencing.
+    all_skills_md = find_markdown(skills_root)
+    top_skill_files = sorted(p for p in all_skills_md if os.path.basename(p) == "SKILL.md")
+    other_skill_md = sorted(p for p in all_skills_md if os.path.basename(p) != "SKILL.md")
+
+    agents_skill_files = sorted(find_markdown(agents_skills_dir, name="SKILL.md"))
     skill_files = sorted(set(top_skill_files) | set(agents_skill_files))
 
-    for path in skill_files:
-        body = check_frontmatter_file(path, errors, required_keys=("name", "description"))
-        check_links(path, body, errors)
+    command_files = find_markdown(commands_dir, recursive=False)
 
-    command_files = find_command_files(os.path.join(REPO_ROOT, "commands"))
+    # Read each file exactly once.
+    texts = {}
+    for path in top_skill_files + other_skill_md + command_files:
+        with open(path, "r", encoding="utf-8") as f:
+            texts[path] = f.read()
+
+    literal_by_file = {}
+    body_start_by_file = {}
+
+    for path in top_skill_files:
+        rel = os.path.relpath(path, REPO_ROOT)
+        fm, body, body_start = parse_frontmatter(texts[path], rel, errors)
+        if fm is None:
+            errors.append(f"{rel}: missing or malformed YAML frontmatter (expected leading '---' block)")
+        else:
+            _validate_frontmatter_keys(rel, path, fm, errors, ("name", "description"))
+        body_start_by_file[path] = body_start
+        literal_by_file[path] = check_links(rel, os.path.dirname(path), body, errors)
+
     for path in command_files:
-        body = check_frontmatter_file(path, errors, required_keys=("description",))
-        check_links(path, body, errors)
+        rel = os.path.relpath(path, REPO_ROOT)
+        fm, body, body_start = parse_frontmatter(texts[path], rel, errors)
+        if fm is None:
+            errors.append(f"{rel}: missing or malformed YAML frontmatter (expected leading '---' block)")
+        else:
+            _validate_frontmatter_keys(rel, path, fm, errors, ("description",))
+        body_start_by_file[path] = body_start
+        literal_by_file[path] = check_links(rel, os.path.dirname(path), body, errors)
 
     # Non-SKILL.md reference docs (skills/holiday-planner/01-*.md …
     # 06-*.md, skills/trip-scraper/search-queries.md) get no frontmatter
     # requirement, but must still get link checking and the
     # no-repo-relative-paths scan — they are the files /setup and /scrape
     # read most, and were previously an unchecked coverage hole.
-    other_skill_md = sorted(
-        set(find_all_markdown(os.path.join(REPO_ROOT, "skills"))) - set(top_skill_files)
-    )
     for path in other_skill_md:
-        with open(path, "r", encoding="utf-8") as f:
-            body = f.read()
-        check_links(path, body, errors)
+        rel = os.path.relpath(path, REPO_ROOT)
+        text = texts[path]
+        _, _, body_start = parse_frontmatter(text, rel, [])  # discard: no frontmatter requirement here
+        body_start_by_file[path] = body_start
+        literal_by_file[path] = check_links(rel, os.path.dirname(path), text, errors)
 
-    agents_skills_dir = os.path.join(REPO_ROOT, ".agents", "skills")
-    check_discovery_completeness(command_files, skill_files, agents_skills_dir, errors)
-    check_agents_skills_structure(errors)
-    check_adapter_contract(errors)
-    check_path_resolution_block(command_files, errors)
+    # Batch the .gitignore exemption lookup for bare backticked literal
+    # paths across every file into a single `git check-ignore --stdin` call.
+    all_git_rel = {
+        os.path.relpath(resolved, REPO_ROOT)
+        for pairs in literal_by_file.values()
+        for _, resolved in pairs
+    }
+    ignored = ignored_paths(all_git_rel, root=REPO_ROOT) if all_git_rel else set()
+    for path, pairs in literal_by_file.items():
+        rel = os.path.relpath(path, REPO_ROOT)
+        for target, resolved in pairs:
+            git_rel = os.path.relpath(resolved, REPO_ROOT)
+            if git_rel in ignored:
+                # Personal-data dirs are runtime paths written by /setup,
+                # /scrape, /watch, /plan, never tracked in git.
+                continue
+            _report_missing(errors, rel, "backticked repo-relative path does not exist", target, resolved)
+
+    adapter_dir_names = None
+    if os.path.isdir(agents_skills_dir):
+        adapter_dir_names = sorted(
+            d for d in os.listdir(agents_skills_dir) if os.path.isdir(os.path.join(agents_skills_dir, d))
+        )
+
+    check_discovery_completeness(command_files, skill_files, adapter_dir_names, errors)
+    check_agents_skills_structure(agents_skills_dir, adapter_dir_names, errors)
+    check_adapter_contract(agents_skills_dir, adapter_dir_names, errors)
+    check_path_resolution_block(command_files, texts, errors)
 
     # .agents/skills/*/SKILL.md deliberately excluded: those adapters are
     # designed to be copied out standalone and legitimately document a bare
     # `.agents/skills/<name>/search.py` CLI invocation for themselves.
-    path_blocks = {path: True for path in command_files}
     check_no_repo_relative_paths(
-        top_skill_files + other_skill_md + command_files, path_blocks, errors
+        [(p, texts[p], body_start_by_file[p]) for p in top_skill_files + other_skill_md + command_files],
+        errors,
     )
 
-    check_manifest_consistency(errors)
+    plugin = load_json(os.path.join(REPO_ROOT, ".claude-plugin", "plugin.json"), errors)
+    marketplace = load_json(os.path.join(REPO_ROOT, ".claude-plugin", "marketplace.json"), errors)
+    check_manifest_consistency(plugin, marketplace, errors)
+
     check_symlink_integrity(errors)
-    check_mcp_consistency(errors)
+
+    mcp = load_json(os.path.join(REPO_ROOT, ".mcp.json"), errors)
+    check_mcp_consistency(mcp, plugin, errors)
+
+    reset_path = os.path.join(commands_dir, "reset.md")
+    if reset_path in texts:
+        reset_text = texts[reset_path]
+    elif os.path.isfile(reset_path):
+        with open(reset_path, "r", encoding="utf-8") as f:
+            reset_text = f.read()
+    else:
+        reset_text = None
+    check_reset_protect_list(reset_text, errors)
 
     if errors:
         sys.stderr.write("lint_skills.py: FAILED\n")

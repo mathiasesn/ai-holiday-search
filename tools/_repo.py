@@ -10,6 +10,24 @@ tracked", and "what does git consider ignored" instead of each re-deriving
 import os
 import subprocess
 
+# Personal-data path names shared by tools/security_guards.py and
+# tools/lint_skills.py, so the same five names aren't independently encoded
+# (as a list of representative sample paths vs. a regex alternation) in two
+# files that could silently drift apart.
+PERSONAL_DIRS = ("profile", "itineraries", "watchlist", "trip_scraper")
+PERSONAL_FILES = ("trip_tracker.csv",)
+
+# Adapter credential env var names shared by tools/lint_skills.py,
+# tools/security_guards.py, and (via a derivation step) .github/workflows/ci.yml.
+ADAPTER_CRED_VARS = (
+    "AMADEUS_API_KEY",
+    "AMADEUS_API_SECRET",
+    "STAYS_API_KEY",
+    "STAYS_API_URL",
+    "PACKAGES_API_KEY",
+    "PACKAGES_API_URL",
+)
+
 
 def repo_root():
     """Return the absolute repo root.
@@ -42,6 +60,31 @@ def tracked_files(root=None):
     if result.returncode != 0:
         raise RuntimeError(f"git ls-files failed: {result.stderr}")
     return [line for line in result.stdout.splitlines() if line]
+
+
+def tracked_modes(paths=None, root=None):
+    """Return {path: git-index-mode} from `git ls-files -s [paths...]`.
+
+    Mode "120000" means a tracked symlink. Handles the tab-separated
+    `"<mode> <sha> <stage>\\t<path>"` output format once, shared by any
+    caller that needs to know how a path is tracked (e.g. verifying
+    `.claude/commands` / `.claude/skills` are tracked as symlinks).
+    """
+    root = root or repo_root()
+    cmd = ["git", "ls-files", "-s"]
+    if paths:
+        cmd += list(paths)
+    result = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"git ls-files -s failed: {result.stderr.strip()}")
+
+    modes = {}
+    for line in result.stdout.splitlines():
+        meta, _, path = line.partition("\t")
+        parts = meta.split()
+        if parts and path:
+            modes[path] = parts[0]
+    return modes
 
 
 def ignored_paths(paths, root=None, no_index=False):
