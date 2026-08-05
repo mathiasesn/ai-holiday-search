@@ -191,23 +191,15 @@ SETUP_PROFILE_WRITE_STEP_TEXT = "Write profile files."
 
 
 def check_setup_gitignore_step(errors):
-    """Pins the prose of commands/setup.md's plugin-mode `.gitignore` step
-    (Sp1): it must still instruct creating `<DATA_ROOT>/.gitignore` containing
-    `*` when absent, and that step must still appear before the step that
-    writes profile files.
+    """commands/setup.md must still instruct creating `<DATA_ROOT>/.gitignore`
+    containing `*`, before the step that writes profile files.
 
-    This deliberately does NOT inspect a real `~/.ai-holiday-search` — a check
-    that only ran (or only asserted something) when that directory happens to
-    exist would read as coverage while asserting nothing on every CI run,
-    since CI never has that directory. The actual regression this guards
-    against is textual: the instruction being deleted from setup.md, or
-    reordered to run after profile files are already written (at which point
-    the privacy gap it exists to close has already been missed). Both are
-    regressions in the command's Markdown prose, so the check reads that
-    prose directly and fails loudly — never silently — on a missing file,
-    missing step, or wrong ordering. Anchored on stable phrases from the step
-    text, not line numbers, so unrelated edits to surrounding steps don't
-    break it.
+    Deliberately a prose pin, not a filesystem check: CI never has a real
+    `~/.ai-holiday-search`, so a check that skipped when that directory is
+    absent would read as coverage while asserting nothing on every run. The
+    observable regression is textual — the instruction deleted, or reordered
+    after profile files are already written. Anchored on stable phrases
+    rather than line numbers.
     """
     if not os.path.isfile(SETUP_MD_PATH):
         errors.append("commands/setup.md: file does not exist — cannot verify the DATA_ROOT/.gitignore step")

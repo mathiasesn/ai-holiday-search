@@ -67,6 +67,7 @@ PLACEHOLDER_TOKEN_RE = re.compile(r"<[A-Za-z_]+>")
 
 PATH_BLOCK_HEADER = "## Path resolution (framework root and data root)"
 PROTECT_LIST_HEADER = "## Explicit protect-list (never delete)"
+MODE_DELETES_HEADER = "## What each mode deletes"
 
 
 def find_markdown(root, *, name=None, recursive=True):
@@ -464,7 +465,10 @@ BARE_PERSONAL_PATH_RE = re.compile(
 # unrelated unrooted mention later on the same line. (Also fully subsumes
 # the narrower "<FRAMEWORK_ROOT>/.agents/skills/*/search.py" case, since its
 # character class already matches that whole span.)
-ROOTED_SPAN_RE = re.compile(r"<(?:DATA_ROOT|FRAMEWORK_ROOT)>/[\w./-]*")
+ROOT_TOKENS = ("<FRAMEWORK_ROOT>", "<DATA_ROOT>")
+ROOTED_SPAN_RE = re.compile(
+    "(?:" + "|".join(re.escape(t) for t in ROOT_TOKENS) + r")/[\w./-]*"
+)
 # An unrooted `skills/...` or `commands/...` reference to a concrete file
 # (ending .md/.py) is a runtime read target that should be rooted at
 # <FRAMEWORK_ROOT>, same class as the .agents/skills/*/search.py case.
@@ -770,35 +774,39 @@ def check_mcp_consistency(mcp, plugin, errors):
     errors.append("plugin.json: 'mcpServers' is neither a string nor an object")
 
 
-BULLET_BACKTICK_PATH_RE = re.compile(r"`([^`]+)`")
+# A plain backticked-span extractor — deliberately NOT a path matcher (that
+# judgement is PROTECT_LIST_PATH_LIKE_RE's job below). Named for what it
+# extracts so it isn't mistaken for a bullet-scoped sibling of
+# BACKTICK_PATH_RE, which pins .md/.py and means something different.
+BACKTICK_SPAN_RE = re.compile(r"`([^`]+)`")
 # Same "does this look like a path" bar as LITERAL_PATH_RE/BACKTICK_PATH_RE
-# above, but for protect-list bullets: either (a) an optional leading
-# `<ROOT>` placeholder followed by one or more `/`-separated segments of
-# word/dot/dash characters (segments may be empty, so a trailing `/` for a
-# directory reference still matches), or (b) a bare filename carrying one of
-# the extensions actually used in that section (`.md`, `.py`, `.toml`,
-# `.csv`, or the `.csv.example` suffix on `trip_tracker.csv.example`) — this
-# second branch is what catches a non-rooted `README.md` or `pyproject.toml`
-# entry that has no `/` at all. A non-path backticked span like `.env` or
-# `RESET` (no `/`, and not one of the extensions above) is deliberately left
-# alone rather than flagged.
+# Branch (b)'s `\.example` suffix is load-bearing, not redundant with the
+# `csv` alternative: `[\w-]+` cannot consume a dot, so `trip_tracker.csv.example`
+# matches only via that suffix. `*` is allowed so a glob entry
+# (`<FRAMEWORK_ROOT>/skills/holiday-planner/*.md`) is still checked for rooting.
 PROTECT_LIST_PATH_LIKE_RE = re.compile(
-    r"^(?:<[A-Za-z_]+>)?[\w.-]*(?:/[\w.-]*)+$"
-    r"|^[\w-]+\.(?:md|py|toml|csv|csv\.example)$"
+    r"^(?:<[A-Za-z_]+>)?[\w.*-]*(?:/[\w.*-]*)+$"
+    r"|^[\w-]+\.(?:md|py|toml|csv(?:\.example)?)$"
 )
-PROTECT_LIST_ROOTS = ("<FRAMEWORK_ROOT>", "<DATA_ROOT>")
 
 
 def check_reset_protect_list(reset_text, errors):
-    """Every `<FRAMEWORK_ROOT>`-rooted path in commands/reset.md's
-    protect-list must actually exist on disk, and every bullet in that
-    section must be rooted at `<FRAMEWORK_ROOT>` or `<DATA_ROOT>` — this is
-    an execution-time guard read by an agent with no doc-relative base, so a
-    doc-relative entry (`../tools/`, a bare `tools/`, or a
-    `[text](../README.md)` link) is a bug, not a style nit. Only backticked
-    spans that actually look like a path (see PROTECT_LIST_PATH_LIKE_RE) are
-    checked, so an explanatory bullet mentioning e.g. `.env` in passing does
-    not false-positive."""
+    """Three assertions over commands/reset.md's deletion guards:
+
+    1. Every `<FRAMEWORK_ROOT>`-rooted protect-list path exists on disk.
+    2. Every protect-list bullet is rooted at `<FRAMEWORK_ROOT>` or
+       `<DATA_ROOT>`. These are execution-time targets read by an agent with
+       no doc-relative base, so `../tools/`, a bare `tools/`, or a
+       `[text](../README.md)` link is a bug, not a style nit. Only path-like
+       backticked spans are checked (see PROTECT_LIST_PATH_LIKE_RE), so a
+       bullet mentioning `.env` in passing does not false-positive.
+    3. The per-mode Deletes/Preserves bullets carry no `../` targets — same
+       property, narrower rule, because those bullets legitimately name bare
+       files in prose.
+
+    Doc-navigation links elsewhere in the file stay relative by design
+    (`<FRAMEWORK_ROOT>` is reserved for execution-time paths), so both
+    rootedness rules are scoped to these two sections only."""
     if reset_text is None:
         errors.append("commands/reset.md: file does not exist (cannot check protect-list)")
         return
@@ -818,29 +826,44 @@ def check_reset_protect_list(reset_text, errors):
                 f"(resolved to {os.path.relpath(resolved, REPO_ROOT)})"
             )
 
+    def unrooted(what, shown):
+        errors.append(
+            f"commands/reset.md: {what} is not rooted: {shown} (execution-time "
+            "target has no doc-relative base; use `<FRAMEWORK_ROOT>/...` or `<DATA_ROOT>/...`)"
+        )
+
     # Every bullet line's backticked spans and Markdown link targets must be
-    # `<FRAMEWORK_ROOT>`-rooted. Restricted to bullet lines (`- ...`) so this
-    # never flags the section's explanatory prose paragraphs.
+    # rooted. Restricted to bullet lines (`- ...`) so this never flags the
+    # section's explanatory prose paragraphs.
     for line in block.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("- "):
+        if not line.strip().startswith("- "):
             continue
-        for m in BULLET_BACKTICK_PATH_RE.finditer(line):
-            path = m.group(1)
-            if not PROTECT_LIST_PATH_LIKE_RE.match(path):
-                continue
-            if not path.startswith(PROTECT_LIST_ROOTS):
-                errors.append(
-                    f"commands/reset.md: protect-list entry is not rooted: `{path}` "
-                    "(execution-time guard has no doc-relative base; use `<FRAMEWORK_ROOT>/...` or `<DATA_ROOT>/...`)"
-                )
-        for m in MD_LINK_RE.finditer(line):
-            target = m.group(1)
-            if not target.startswith(PROTECT_LIST_ROOTS):
-                errors.append(
-                    f"commands/reset.md: protect-list entry is not rooted: "
-                    f"[{target}] link (execution-time guard has no doc-relative base; use `<FRAMEWORK_ROOT>/...` or `<DATA_ROOT>/...`)"
-                )
+        for path in BACKTICK_SPAN_RE.findall(line):
+            if PROTECT_LIST_PATH_LIKE_RE.match(path) and not path.startswith(ROOT_TOKENS):
+                unrooted("protect-list entry", f"`{path}`")
+        for target in MD_LINK_RE.findall(line):
+            if not target.startswith(ROOT_TOKENS):
+                unrooted("protect-list entry", f"[{target}] link")
+
+    # The per-mode "Deletes:"/"Preserves:" bullets assert the same
+    # execution-time property as the protect-list and were previously
+    # unchecked, so reset.md could contradict itself while linting clean.
+    # Only `../`-prefixed paths are flagged here: these bullets legitimately
+    # name bare files in prose (`01-traveler-profile.md`), so the broader
+    # path-like rule used above would false-positive on them.
+    modes = extract_section(reset_text, MODE_DELETES_HEADER)
+    if modes is None:
+        errors.append(f"commands/reset.md: missing '{MODE_DELETES_HEADER}' section")
+        return
+    for line in modes[0].splitlines():
+        if not line.strip().startswith("- "):
+            continue
+        for path in BACKTICK_SPAN_RE.findall(line):
+            if path.startswith("../"):
+                unrooted("mode delete/preserve target", f"`{path}`")
+        for target in MD_LINK_RE.findall(line):
+            if target.startswith("../"):
+                unrooted("mode delete/preserve target", f"[{target}] link")
 
 
 def main():

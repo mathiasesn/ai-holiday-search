@@ -50,12 +50,12 @@ authoritative statement of what must never be touched.
 
 ### `profile`
 - Deletes: `<DATA_ROOT>/profile/` (the entire directory — `01-traveler-profile.md` … `06-packing-and-prep.md` and anything else under it) and `<DATA_ROOT>/trip_tracker.csv`.
-- **Preserves**: the tracked templates in `../skills/holiday-planner/*.md` (the `<!-- FILL IN -->` scaffolds), `../trip_tracker.csv.example`, and all other framework rules/commands/skills.
+- **Preserves**: the tracked templates in `<FRAMEWORK_ROOT>/skills/holiday-planner/*.md` (the `<!-- FILL IN -->` scaffolds), `<FRAMEWORK_ROOT>/trip_tracker.csv.example`, and all other framework rules/commands/skills.
 - After this, the user must run `/setup` again before `/scrape` or `/plan` will work.
 
 ### `watchlist`
 - Deletes: `<DATA_ROOT>/watchlist/` (one JSON file per watched trip, and any price history it contains).
-- Preserves: [../skills/price-watch/SKILL.md](../skills/price-watch/SKILL.md) and everything else.
+- Preserves: `<FRAMEWORK_ROOT>/skills/price-watch/SKILL.md` and everything else.
 
 ### `all`
 - Does everything `profile` and `watchlist` do, **plus**:
