@@ -78,7 +78,14 @@ and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `../skills/ho
 
 5. **Merge and normalize.** Combine whatever was gathered from modes (a)/(b)/(c) into a single coherent set of answers covering all five interview areas. Flag any area still missing information and ask a final clarifying question before writing files, rather than guessing.
 
-6. **Write profile files.**
+6. **Ensure `<DATA_ROOT>` is gitignored (plugin mode only).** In plugin mode, before writing
+   any profile file, check whether `<DATA_ROOT>/.gitignore` exists. If it does not, create it
+   containing a single line: `*`. This is necessary because `<DATA_ROOT>` is `~/.ai-holiday-search`,
+   and `$HOME` may itself be a tracked git repo (e.g. a dotfiles repo) — without this file, personal
+   profile data written under `~/.ai-holiday-search` could get swept into a commit there. In clone
+   mode, skip this step; `DATA_ROOT` is the repo root, already covered by this repo's own `.gitignore`.
+
+7. **Write profile files.**
    - For each of `01-traveler-profile.md`, `02-travel-style.md`, `03-trip-evaluation.md`, `04-itinerary-templates.md`, `05-budget-rules.md`, `06-packing-and-prep.md`:
      - Read the template from `../skills/holiday-planner/<name>.md`.
      - Replace every `<!-- FILL IN -->` marker with the corresponding captured information. Leave the surrounding structure and framework rules in the template intact — only fill markers, don't rewrite the scaffold.
@@ -88,9 +95,9 @@ and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `../skills/ho
      - If `<DATA_ROOT>/profile/tooling.md` does not exist, write it with the caller defaults: `/scrape` → `claude-in-chrome`, `/watch` → Playwright MCP.
      - If it already exists, treat this the same as an existing filled profile elsewhere in this flow: do not clobber it silently. Tell the user it already has driver preferences set and ask whether to keep it as-is or reset it to the caller defaults.
 
-7. **State the privacy boundary.** Tell the user explicitly: `<DATA_ROOT>/profile/` and `<DATA_ROOT>/trip_tracker.csv` are personal data and must never be committed anywhere — in plugin mode they live outside any repo (under `~/.ai-holiday-search`), and in clone mode they are gitignored. The six numbered files hold their personal travel data; `tooling.md` holds no travel data at all — it's a local tooling knob (which MCP driver runs browser reads) — but it lives alongside them and stays local for the same reason: nothing under `<DATA_ROOT>/profile/` should end up in a shared fork or PR. Report `<DATA_ROOT>`'s absolute path to the user so they know where their local data lives.
+8. **State the privacy boundary.** Tell the user explicitly: `<DATA_ROOT>/profile/` and `<DATA_ROOT>/trip_tracker.csv` are personal data and must never be committed anywhere — in plugin mode they live outside any repo (under `~/.ai-holiday-search`, protected by the `<DATA_ROOT>/.gitignore` created in step 6 in case `$HOME` is itself a tracked repo), and in clone mode they are gitignored. The six numbered files hold their personal travel data; `tooling.md` holds no travel data at all — it's a local tooling knob (which MCP driver runs browser reads) — but it lives alongside them and stays local for the same reason: nothing under `<DATA_ROOT>/profile/` should end up in a shared fork or PR. Report `<DATA_ROOT>`'s absolute path to the user so they know where their local data lives.
 
-8. **Echo a summary for confirmation.** Print a short recap of the captured profile — group composition, home airports, budget range, style, top dealbreakers, and 2-3 history highlights with their stated opinions — and ask the user to confirm it's accurate or point out corrections. Do not treat the profile as final until confirmed; re-write the affected file(s) if the user corrects something.
+9. **Echo a summary for confirmation.** Print a short recap of the captured profile — group composition, home airports, budget range, style, top dealbreakers, and 2-3 history highlights with their stated opinions — and ask the user to confirm it's accurate or point out corrections. Do not treat the profile as final until confirmed; re-write the affected file(s) if the user corrects something.
 
 ## Output
 A confirmed, filled `<DATA_ROOT>/profile/` folder (including `tooling.md`) ready for `/scrape` and `/plan`, plus `<DATA_ROOT>/trip_tracker.csv` if it was missing.
