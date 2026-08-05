@@ -69,7 +69,7 @@ Score the parsed destination/listing against the profile using [../skills/holida
 
 ## Step 3 — Draft
 Produce a day-by-day itinerary draft:
-- One entry per day following the structure and pacing limits in [../skills/holiday-planner/04-itinerary-templates.md](../skills/holiday-planner/04-itinerary-templates.md) (e.g. max anchor activities/day, rest-day cadence) as defined in the user's profile.
+- One entry per day following the structure and pacing limits in [../skills/holiday-planner/04-itinerary-templates.md](../skills/holiday-planner/04-itinerary-templates.md) (e.g. max anchor activities/day, rest-day cadence) as defined in the user's profile. These pacing limits are hard constraints on the draft, not suggestions — do not draft a day that exceeds them.
 - A budget table per [../skills/holiday-planner/05-budget-rules.md](../skills/holiday-planner/05-budget-rules.md) with rows for: transport, stay, activities, food estimate, buffer. Use the profile's currency (EUR default, DKK noted if relevant). Mark every estimated figure as a web-search estimate, not a confirmed price.
 - Keep this as a working draft in memory/scratch — do not present it to the user yet.
 
@@ -115,7 +115,7 @@ Using the reviewer's findings, revise the draft: swap out closed/poor-fit venues
 ## Step 6 — Verify
 Before presenting anything, run this verification checklist against the revised itinerary. If any check fails, loop back to Step 5 (revise again) — do not present a plan that fails verification:
 - [ ] Every budget table's rows sum correctly to the stated total (transport + stay + activities + food + buffer).
-- [ ] No day exceeds the pacing rules defined in the user's profile (`04-itinerary-templates.md` limits, e.g. max anchor activities/day, required rest-day cadence).
+- [ ] No day exceeds the pacing rules defined in the user's profile (`04-itinerary-templates.md` limits, e.g. max anchor activities/day, required rest-day cadence). Pacing limits are enforced, not suggested: if any day breaks them, that is a hard reject — force a revision (loop back to Step 5) rather than noting it for the user to weigh.
 - [ ] Every named venue/activity has been confirmed to exist via search (not just assumed).
 - [ ] Travel legs between consecutive activities on each day are feasible given transit/drive times.
 
