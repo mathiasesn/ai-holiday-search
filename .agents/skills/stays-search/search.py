@@ -22,7 +22,7 @@ Never prints or logs secrets (e.g. STAYS_API_KEY), including in error messages.
 
 Result record: source, title, url, price, currency, price_per_person, dates
 (check_in/check_out), details (free-form). Authoritative shape:
-skills/trip-scraper/SKILL.md ("Adapter result record").
+../../../skills/trip-scraper/SKILL.md ("Adapter result record").
 """
 import argparse
 import json

@@ -61,7 +61,7 @@ If the same destination/dates are watched from two different sources, append a s
   changed afterward — it's the baseline every later check compares against.
 - `price_history` gets a new entry appended on every `/watch` re-check (including the very
   first one, which duplicates `original_snapshot`). Never overwrite or drop earlier entries.
-- `trip` mirrors the normalized candidate record fields from `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md` needed to
+- `trip` mirrors the normalized candidate record fields from [../trip-scraper/SKILL.md](../trip-scraper/SKILL.md) needed to
   re-run the same search: source, route, dates, url.
 
 ## Adding a trip (`/watch add`)
@@ -81,7 +81,7 @@ driver-resolution step) and, if it's available, open **one** browser context and
 consent/cookie wall **once** — not per trip. Reuse that same context for every browser-driven
 trip in this run; do not re-open a context or re-clear the wall per trip. If the driver is
 unavailable per its own readiness check (see the trigger list in
-`<FRAMEWORK_ROOT>/skills/trivago-search/SKILL.md` "Fallback chain"), degrade the **whole** browser-driven
+[../trivago-search/SKILL.md](../trivago-search/SKILL.md) "Fallback chain"), degrade the **whole** browser-driven
 branch for this run once, rather than re-discovering the unavailability on every trip.
 
 Apply the same once-per-run economy to a **blocked host**: if a site rejects the document itself
@@ -93,7 +93,7 @@ refused the request wastes the navigation and every read after it on each subseq
 
 1. Dispatch on the trip's kind (identified by `trip.source`):
    - **Adapter-backed** (`source` is one of `flights-search`, `stays-search`,
-     `packages-search`): re-run the matching `<FRAMEWORK_ROOT>/.agents/skills/*/search.py --json` adapter for
+     `packages-search`): re-run the matching `../../.agents/skills/*/search.py --json` adapter for
      the same route/dates, using `trip-scraper`'s fan-out and fallback rules (adapter → web
      search on missing credentials).
    - **Browser-driven** (`source` is one of `"trivago-search"`, `"momondo-search"`,
@@ -102,7 +102,7 @@ refused the request wastes the navigation and every read after it on each subseq
      path) if `trip.url` no longer resolves to a usable results page. This also removes most of
      the unattended-disambiguation hazard (e.g. trivago's autocomplete), since a stored URL
      needs no destination resolution. The driver contract — tool-capability mapping and
-     etiquette limits — lives once in `<FRAMEWORK_ROOT>/skills/trivago-search/SKILL.md`; follow it rather
+     etiquette limits — lives once in [../trivago-search/SKILL.md](../trivago-search/SKILL.md); follow it rather
      than duplicating it here. On any chain-ending condition (bot challenge, consent wall, zero
      results, unreadable page), fall through to Claude web search exactly as the attended
      fallback chain does. If web search also yields nothing, the check is terminal for this trip:
@@ -152,5 +152,5 @@ Delete `<DATA_ROOT>/watchlist/<slug>.json`. Confirm the slug and destination wit
 Playwright MCP is `/watch`'s default driver because it is the only one of the two that can run
 unattended — `claude-in-chrome` needs an attended session and per-site extension permission, so
 it cannot execute on a schedule. Scheduled/cron runs require the headless server already declared
-in the tracked `<FRAMEWORK_ROOT>/.mcp.json` (see `<FRAMEWORK_ROOT>/ARCHI.md` §7 for its argument list); a headed browser
+in the tracked `../../.mcp.json` (see [../../ARCHI.md](../../ARCHI.md) §7 for its argument list); a headed browser
 cannot start where there is no display.

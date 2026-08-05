@@ -30,7 +30,7 @@ run on a schedule — that is the sole reason the second driver exists. The shar
 drivers: after 2-3 consecutive tool failures on any step, stop retrying and drop to the
 fallback chain below (see there for the full trigger list).
 
-The Playwright MCP server is declared in the tracked `<FRAMEWORK_ROOT>/.mcp.json` (see `<FRAMEWORK_ROOT>/ARCHI.md` §7 for
+The Playwright MCP server is declared in the tracked `../../.mcp.json` (see [../../ARCHI.md](../../ARCHI.md) §7 for
 both servers' full argument lists). The tool names below were confirmed present in a connected
 Playwright MCP session on 2026-07-26.
 
@@ -56,8 +56,8 @@ booking-search) commit to under "Limits and etiquette".
 **Why these Playwright flags:**
 
 - `--headless`: a scheduled/cron run has no display; a headed browser cannot start there. This
-  flag is what makes the scheduling claim above actually true. The tracked `<FRAMEWORK_ROOT>/.mcp.json` also
-  declares a second, headed `playwright-headed` server for attended debugging — see `<FRAMEWORK_ROOT>/ARCHI.md`
+  flag is what makes the scheduling claim above actually true. The tracked `../../.mcp.json` also
+  declares a second, headed `playwright-headed` server for attended debugging — see [../../ARCHI.md](../../ARCHI.md)
   §7 for the recipe and both servers' config; this file only needs the hazard note that follows.
 - `--isolated`: a fresh profile per run, no persisted cookies or login state. This side-steps
   the privacy hazard in step 3 below (the homepage prefills the user's previous search and
@@ -77,7 +77,7 @@ bot challenge, consent wall, or disambiguation prompt, so the attended tail of t
 chain below — step 8 and the disambiguation step 4 — is unavailable. The authoritative
 definition of the resulting terminal outcome (fall through to web search, then record an
 unverified `price_history` entry, reported distinctly from a genuine sold-out) lives in
-`<FRAMEWORK_ROOT>/skills/price-watch/SKILL.md`'s re-check procedure — this skill follows it rather than
+[../price-watch/SKILL.md](../price-watch/SKILL.md)'s re-check procedure — this skill follows it rather than
 restating the entry shape, which is that file's to change. One trivago-specific note: an ambiguous destination with
 no known `locationId` in hand cannot be resolved unattended and takes that same terminal outcome
 rather than guessing among the candidates.
@@ -192,7 +192,7 @@ primary price.
 ## Normalization
 
 This skill does not define the adapter result record, the normalized candidate record, or
-`<DATA_ROOT>/trip_scraper/seen.json` — `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md` is authoritative for all
+`<DATA_ROOT>/trip_scraper/seen.json` — [../trip-scraper/SKILL.md](../trip-scraper/SKILL.md) is authoritative for all
 three; read it for the full shapes and the dedupe rules, plus the cross-source duplicate
 presentation rule (one row per source, score-once) for when the same property also surfaces via
 another enabled source. Only the trivago-specific field mappings are given here:
@@ -202,7 +202,7 @@ another enabled source. Only the trivago-specific field mappings are given here:
 - `price`: the **stay total**, read from the "kr N total" line (see price trap above) — never
   the per-night headline number.
 - `currency`: `"DKK"` — what the page reads. Per
-  `<FRAMEWORK_ROOT>/skills/holiday-planner/05-budget-rules.md` (EUR primary, DKK noted), also present a
+  [../holiday-planner/05-budget-rules.md](../holiday-planner/05-budget-rules.md) (EUR primary, DKK noted), also present a
   EUR-converted figure and label it a **conversion estimate** (rate not pinned to a live source)
   on top of the existing web-read-estimate label.
 - `price_per_person`: the stay total (`price` above) divided by the adult count used in the
@@ -241,7 +241,7 @@ Then, in order:
    if the orchestrating skill distinguishes provenance).
 8. **Final fallback: ask the user to paste listing text** (a specific hotel page, email, or
    screenshot-derived text), per `CLAUDE.md`'s paste-anything fallback and
-   `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md`'s "Paste-a-listing fallback" section — this enters the
+   [../trip-scraper/SKILL.md](../trip-scraper/SKILL.md)'s "Paste-a-listing fallback" section — this enters the
    same normalize → dedupe → score pipeline as any other candidate, but takes `"source":
    "pasted"`, **not** `"trivago-search"` (per that section; `source` feeds the dedupe key hash).
    **Attended-only** — there is no user to ask on an unattended run; see "Unattended terminal

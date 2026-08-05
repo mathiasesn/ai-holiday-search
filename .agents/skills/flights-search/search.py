@@ -15,7 +15,7 @@ Never prints or logs the API key/secret, including in error messages.
 
 Result record: source, title, url, price, currency, price_per_person, dates
 (depart/return), details (free-form). Authoritative shape:
-skills/trip-scraper/SKILL.md ("Adapter result record").
+../../../skills/trip-scraper/SKILL.md ("Adapter result record").
 """
 import argparse
 import json

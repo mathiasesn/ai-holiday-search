@@ -6,7 +6,7 @@ description: Search orchestration across flight, stay, and package sources for /
 # Trip Scraper
 
 Search orchestration used by `/scrape`. It does not itself hold search logic for any one
-source — it fans out to the thin adapters in `<FRAMEWORK_ROOT>/.agents/skills/`, normalizes what they return,
+source — it fans out to the thin adapters in `../../.agents/skills/`, normalizes what they return,
 deduplicates against previously seen candidates, and hands the result set to `holiday-planner`'s
 fit-scoring framework (`03-trip-evaluation.md`) for ranking.
 
@@ -51,7 +51,7 @@ uv run --script "<FRAMEWORK_ROOT>/.agents/skills/packages-search/search.py" --js
   - `fallback` is always `"web_search"`.
   - `results` is always `[]`.
 
-  Any forked or new adapter under `<FRAMEWORK_ROOT>/.agents/skills/` MUST emit this exact shape on its
+  Any forked or new adapter under `../../.agents/skills/` MUST emit this exact shape on its
   no-credentials path. On exit code 2 with `status == "no_credentials"`, do **not** treat it as a
   hard failure — fall back to Claude's own web search for that source, using the same query
   parameters, and normalize the results the same way.
@@ -65,7 +65,7 @@ no CLI invocation, and no exit code — it drives a real browser session, define
 fallback chain instead of the exit-2 no-credentials protocol above, and normalizes its results
 into the same adapter result record. `trivago-search` is one instance, stays-only: it runs on
 every `/scrape`, alongside (not instead of) `stays-search`, driving a session per
-`<FRAMEWORK_ROOT>/skills/trivago-search/SKILL.md` (whose default driver is the `claude-in-chrome` MCP
+[../trivago-search/SKILL.md](../trivago-search/SKILL.md) (whose default driver is the `claude-in-chrome` MCP
 tools) — that file is authoritative for its exact fallback trigger list and order, do not
 re-enumerate it here.
 
@@ -73,17 +73,17 @@ re-enumerate it here.
 three** verticals — flights, stays, and packages — as three parallel procedures inside one
 skill. It runs on every `/scrape`, alongside the CLI adapters, for whichever verticals the run
 calls for (see the query-driven vertical-selection rule below). It has its own fallback chain,
-authoritative in `<FRAMEWORK_ROOT>/skills/momondo-search/SKILL.md`; do not re-enumerate it here. Its
+authoritative in [../momondo-search/SKILL.md](../momondo-search/SKILL.md); do not re-enumerate it here. Its
 results normalize into the same adapter result record with `source: "momondo-search"`, reading
 DKK — the same EUR conversion-estimate rule that applies to `trivago-search` (see
-"Normalization" in that skill and `<FRAMEWORK_ROOT>/skills/holiday-planner/05-budget-rules.md`) applies
+"Normalization" in that skill and [../holiday-planner/05-budget-rules.md](../holiday-planner/05-budget-rules.md)) applies
 here too.
 
 `booking-search` is the other current instance, spanning **two** verticals — stays and
 flights — as two parallel procedures inside one skill; it has **no packages vertical**
 (verified 2026-07-25: booking.com has no bundled flight+hotel package product). It runs on
 every `/scrape`, alongside the CLI adapters, for whichever of its two verticals the run calls
-for. It has its own fallback chain, authoritative in `<FRAMEWORK_ROOT>/skills/booking-search/SKILL.md`;
+for. It has its own fallback chain, authoritative in [../booking-search/SKILL.md](../booking-search/SKILL.md);
 do not re-enumerate it here. Its results normalize into the same adapter result record with
 `source: "booking-search"`, reading DKK — the same EUR conversion-estimate rule that applies to
 `trivago-search` and `momondo-search` applies here too.
@@ -100,7 +100,7 @@ restating it.
 
 ## Adapter result record (authoritative)
 
-Each `<FRAMEWORK_ROOT>/.agents/skills/*/search.py` adapter's `--json` output is a JSON array of records in this
+Each `../../.agents/skills/*/search.py` adapter's `--json` output is a JSON array of records in this
 exact shape (this is the single authority for this record — adapter `SKILL.md` files and module
 docstrings only summarize it and point back here):
 
@@ -152,7 +152,7 @@ Every result, regardless of source, is normalized to this shape before scoring:
 ```
 
 `price`/`currency`/`per_person` follow the currency handling rules in
-`<FRAMEWORK_ROOT>/skills/holiday-planner/05-budget-rules.md`. `url` is omitted (or `null`) for pasted listings without a
+[../holiday-planner/05-budget-rules.md](../holiday-planner/05-budget-rules.md). `url` is omitted (or `null`) for pasted listings without a
 link.
 
 ## Deduplication against <DATA_ROOT>/trip_scraper/seen.json
@@ -217,7 +217,7 @@ Example: `trivago-search` and `momondo-search` both read DKK, `stays-search` is 
 and `booking-search` also reads DKK — **convert to a common currency before comparing "lowest";
 never compare raw numbers in different currencies** (a DKK figure looks smaller than an EUR one
 at the same real price and would silently win every time; see
-`<FRAMEWORK_ROOT>/skills/holiday-planner/05-budget-rules.md` for the conversion/labeling policy). Name
+[../holiday-planner/05-budget-rules.md](../holiday-planner/05-budget-rules.md) for the conversion/labeling policy). Name
 every source on its own row — format example only, not a real or current price:
 "trivago-search: kr 8,778" shown grouped with "momondo-search: kr 9,150" and "booking-search: kr
 9,020 — same property, price gap likely fees/timing; all are estimates", scored once at the
@@ -227,5 +227,5 @@ of each source's existing web-read-estimate label.
 ## Handing off to scoring
 
 Once deduplicated, pass the normalized candidate list to the fit-scoring framework in
-`<FRAMEWORK_ROOT>/skills/holiday-planner/03-trip-evaluation.md`, sorted by score descending, each with its reasoning
+[../holiday-planner/03-trip-evaluation.md](../holiday-planner/03-trip-evaluation.md), sorted by score descending, each with its reasoning
 shown per the format in that file.

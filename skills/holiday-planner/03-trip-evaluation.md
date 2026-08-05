@@ -3,7 +3,7 @@
 > This file's framework is operational, not decorative — `/scrape` and `/plan` must actually
 > compute scores this way, not just gesture at "fit." Weights below are generic sensible
 > defaults; `/setup` may adjust them in your `<DATA_ROOT>/profile/03-trip-evaluation.md` copy per the
-> Customization table in `<FRAMEWORK_ROOT>/README.md`. If a filled copy exists in `<DATA_ROOT>/profile/`, it wins.
+> Customization table in [../../README.md](../../README.md). If a filled copy exists in `<DATA_ROOT>/profile/`, it wins.
 
 ## Scoring criteria and weights
 

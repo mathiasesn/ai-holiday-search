@@ -33,22 +33,22 @@ under a guessed root.
 
 ## Purpose
 Populate the `<DATA_ROOT>/profile/` folder (`01-traveler-profile.md` … `06-packing-and-prep.md`)
-and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `<FRAMEWORK_ROOT>/skills/holiday-planner/`, so
+and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `../skills/holiday-planner/`, so
 `/scrape` and `/plan` have a real profile to evaluate trips against. Also seeds
 `<DATA_ROOT>/profile/tooling.md`, the browser-driver preference (see step 6 for what that is and isn't).
 
 ## Inputs
 - `$ARGUMENTS` — optional. If present, treat it as a pasted freeform description (mode b).
-- `<DATA_ROOT>/documents/` folder — may contain `past-trips/` and `preferences/` material (mode a). Create it (and its `past-trips/`, `preferences/` subfolders) on demand if missing.
+- `<DATA_ROOT>/documents/` folder — may contain past-trips and preferences material in their respective subfolders (mode a). Create those subfolders on demand if missing.
 - Existing `<DATA_ROOT>/profile/` files — if present, this run is an update, not a first fill.
 - Existing `<DATA_ROOT>/profile/tooling.md` — if present, this run must not silently overwrite it.
 
 ## State touched
-- Reads (never writes): `<FRAMEWORK_ROOT>/skills/holiday-planner/01-traveler-profile.md` … `06-packing-and-prep.md` (templates with `<!-- FILL IN -->` markers).
+- Reads (never writes): [../skills/holiday-planner/01-traveler-profile.md](../skills/holiday-planner/01-traveler-profile.md) … `06-packing-and-prep.md` (templates with `<!-- FILL IN -->` markers).
 - Writes: `<DATA_ROOT>/profile/01-traveler-profile.md` … `<DATA_ROOT>/profile/06-packing-and-prep.md`.
 - Writes: `<DATA_ROOT>/profile/tooling.md` (browser-driver preference; see step 6) if it does not already exist, or after confirming an overwrite with the user if it does.
-- Writes: `<DATA_ROOT>/trip_tracker.csv` (copied from `<FRAMEWORK_ROOT>/trip_tracker.csv.example`) if it does not already exist.
-- Never touches `<DATA_ROOT>/documents/`, `<FRAMEWORK_ROOT>/skills/`, or any tracked framework file.
+- Writes: `<DATA_ROOT>/trip_tracker.csv` (copied from `../trip_tracker.csv.example`) if it does not already exist.
+- Never touches `<DATA_ROOT>/documents/`, `../skills/`, or any tracked framework file.
 
 ## Steps
 
@@ -80,15 +80,15 @@ and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `<FRAMEWORK_R
 
 6. **Write profile files.**
    - For each of `01-traveler-profile.md`, `02-travel-style.md`, `03-trip-evaluation.md`, `04-itinerary-templates.md`, `05-budget-rules.md`, `06-packing-and-prep.md`:
-     - Read the template from `<FRAMEWORK_ROOT>/skills/holiday-planner/<name>.md`.
+     - Read the template from `../skills/holiday-planner/<name>.md`.
      - Replace every `<!-- FILL IN -->` marker with the corresponding captured information. Leave the surrounding structure and framework rules in the template intact — only fill markers, don't rewrite the scaffold.
      - Write the result to `<DATA_ROOT>/profile/<name>.md`, creating the `<DATA_ROOT>/profile/` directory first if needed.
-   - If `<DATA_ROOT>/trip_tracker.csv` does not already exist, copy `<FRAMEWORK_ROOT>/trip_tracker.csv.example` to `<DATA_ROOT>/trip_tracker.csv` unmodified (header row only).
-   - **Seed `<DATA_ROOT>/profile/tooling.md`** — the browser-driver preference, documented in `<FRAMEWORK_ROOT>/ARCHI.md`. This is not one of the six numbered traveler-preference templates and must never be merged into them; it holds a tooling knob, not travel data.
+   - If `<DATA_ROOT>/trip_tracker.csv` does not already exist, copy `../trip_tracker.csv.example` to `<DATA_ROOT>/trip_tracker.csv` unmodified (header row only).
+   - **Seed `<DATA_ROOT>/profile/tooling.md`** — the browser-driver preference, documented in [../ARCHI.md](../ARCHI.md). This is not one of the six numbered traveler-preference templates and must never be merged into them; it holds a tooling knob, not travel data.
      - If `<DATA_ROOT>/profile/tooling.md` does not exist, write it with the caller defaults: `/scrape` → `claude-in-chrome`, `/watch` → Playwright MCP.
      - If it already exists, treat this the same as an existing filled profile elsewhere in this flow: do not clobber it silently. Tell the user it already has driver preferences set and ask whether to keep it as-is or reset it to the caller defaults.
 
-7. **State the privacy boundary.** Tell the user explicitly: `<DATA_ROOT>/profile/` and `<DATA_ROOT>/trip_tracker.csv` are personal data and must never be committed anywhere — in plugin mode they live outside any repo (under `~/.ai-holiday-search`), and in clone mode they are gitignored. `profile/01…06-*.md` hold their personal travel data; `profile/tooling.md` holds no travel data at all — it's a local tooling knob (which MCP driver runs browser reads) — but it lives in the same `profile/` folder and stays local for the same reason: nothing under `<DATA_ROOT>/profile/` should end up in a shared fork or PR. Report `<DATA_ROOT>`'s absolute path to the user so they know where their local data lives.
+7. **State the privacy boundary.** Tell the user explicitly: `<DATA_ROOT>/profile/` and `<DATA_ROOT>/trip_tracker.csv` are personal data and must never be committed anywhere — in plugin mode they live outside any repo (under `~/.ai-holiday-search`), and in clone mode they are gitignored. The six numbered files hold their personal travel data; `tooling.md` holds no travel data at all — it's a local tooling knob (which MCP driver runs browser reads) — but it lives alongside them and stays local for the same reason: nothing under `<DATA_ROOT>/profile/` should end up in a shared fork or PR. Report `<DATA_ROOT>`'s absolute path to the user so they know where their local data lives.
 
 8. **Echo a summary for confirmation.** Print a short recap of the captured profile — group composition, home airports, budget range, style, top dealbreakers, and 2-3 history highlights with their stated opinions — and ask the user to confirm it's accurate or point out corrections. Do not treat the profile as final until confirmed; re-write the affected file(s) if the user corrects something.
 

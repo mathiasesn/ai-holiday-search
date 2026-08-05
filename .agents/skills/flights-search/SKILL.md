@@ -48,7 +48,7 @@ plain text).
 
 Each result has `source`, `title`, `url`, `price`, `currency`, `price_per_person`,
 `dates` (`{depart, return}`), and free-form `details` (here: raw Amadeus itinerary
-segments). See `skills/trip-scraper/SKILL.md` ("Adapter result record") for
+segments). See [../../../skills/trip-scraper/SKILL.md](../../../skills/trip-scraper/SKILL.md) ("Adapter result record") for
 the authoritative field-by-field definition, shared across all three
 `.agents/skills/*` adapters. `--json` with no matches prints `[]`.
 
@@ -61,7 +61,7 @@ network call. It prints a machine-readable status and exits **2**:
 {"status": "no_credentials", "reason": "missing_api_credentials", "message": "...", "fallback": "web_search", "results": []}
 ```
 
-This is the adapter no-credentials protocol — see `skills/trip-scraper/SKILL.md` for the
+This is the adapter no-credentials protocol — see [../../../skills/trip-scraper/SKILL.md](../../../skills/trip-scraper/SKILL.md) for the
 authoritative shape shared by all three adapters. Callers (e.g. `/scrape`) should treat exit code
 `2` as "use Claude web search for
 flights on this route instead of failing the run." Exit code `1` means a genuine

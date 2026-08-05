@@ -29,7 +29,7 @@ session is marked UNVERIFIED below and must not be treated as fact.
 ## Vertical selection
 
 Which of the two verticals run is **query-driven, not always-on** — the rule is authoritative in
-`<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md` ("Vertical selection"); do not restate it here. This
+[../trip-scraper/SKILL.md](../trip-scraper/SKILL.md) ("Vertical selection"); do not restate it here. This
 skill's obligation under it: run only the verticals it was asked for, name which ones ran, say
 plainly which were skipped, and ask when ambiguous.
 
@@ -44,11 +44,11 @@ JS dialogs, etc.) applies as usual; the one skill-specific rule is: after 2-3 co
 failures on any step, stop retrying and drop to that vertical's fallback chain below.
 
 Either driver can run this skill's stays/flights procedures unchanged. The two-driver model
-lives once in `<FRAMEWORK_ROOT>/skills/trivago-search/SKILL.md` ("Driver model") and applies here
+lives once in [../trivago-search/SKILL.md](../trivago-search/SKILL.md) ("Driver model") and applies here
 unchanged — read it there; this file does not restate any part of it. This
 skill's own attended-only fallback step is step 7 below ("ask the user to paste listing text");
 unattended, the substitute is the terminal outcome authoritatively defined in
-`<FRAMEWORK_ROOT>/skills/price-watch/SKILL.md` ("Re-check procedure").
+[../price-watch/SKILL.md](../price-watch/SKILL.md) ("Re-check procedure").
 
 ## Privacy hazard — read before driving any form
 
@@ -243,7 +243,7 @@ not do that as part of normal operation. Do not re-investigate this finding; it 
 ## Normalization
 
 This skill does not define the adapter result record, the normalized candidate record, or
-`<DATA_ROOT>/trip_scraper/seen.json` — `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md` is authoritative for all three,
+`<DATA_ROOT>/trip_scraper/seen.json` — [../trip-scraper/SKILL.md](../trip-scraper/SKILL.md) is authoritative for all three,
 including the cross-source duplicate presentation rule (one row per source, scored once on the
 lowest price) for when the same property/flight also surfaces via another enabled source. Only
 booking-specific mappings are given here:
@@ -259,7 +259,7 @@ booking-specific mappings are given here:
   this reconstructs the per-person headline the page already displays, so the two should agree —
   if they don't, the party total was misread and must be re-checked.
 - `currency`: `"DKK"` — what the page reads. Per
-  `<FRAMEWORK_ROOT>/skills/holiday-planner/05-budget-rules.md` (EUR primary, DKK noted), also present a
+  [../holiday-planner/05-budget-rules.md](../holiday-planner/05-budget-rules.md) (EUR primary, DKK noted), also present a
   EUR-converted figure and label it a **conversion estimate** (rate not pinned to a live source),
   on top of the web-read-estimate label below.
 - `dates`: stays — `{"check_in": "<YYYY-MM-DD>", "check_out": "<YYYY-MM-DD>"}`; flights —
@@ -277,7 +277,7 @@ booking-specific mappings are given here:
 the same property or flight is surfaced by more than one source, present **one linked row per
 source**, each with its own price and `source`, visibly grouped as the same underlying item, price
 gap noted as further evidence all figures are estimates. Score and rank the group **once**, using
-the lowest of the quoted prices — see `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md` for the shared
+the lowest of the quoted prices — see [../trip-scraper/SKILL.md](../trip-scraper/SKILL.md) for the shared
 candidate record this relies on.
 
 ## Fallback chain
@@ -306,7 +306,7 @@ Then, in order, for the affected vertical only:
    skill distinguishes provenance).
 7. **Final fallback: ask the user to paste listing text** (a specific hotel/flight page, email, or
    screenshot-derived text), per `CLAUDE.md`'s paste-anything fallback and
-   `<FRAMEWORK_ROOT>/skills/trip-scraper/SKILL.md`'s "Paste-a-listing fallback" section — this enters the
+   [../trip-scraper/SKILL.md](../trip-scraper/SKILL.md)'s "Paste-a-listing fallback" section — this enters the
    same normalize → dedupe → score pipeline as any other candidate, but takes `"source":
    "pasted"`, **not** `"booking-search"` (per that section; `source` feeds the dedupe key hash).
    **Attended-only** — see the "Driver model" section above for the unattended substitute.
