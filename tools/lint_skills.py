@@ -771,15 +771,34 @@ def check_mcp_consistency(mcp, plugin, errors):
 
 
 BULLET_BACKTICK_PATH_RE = re.compile(r"`([^`]+)`")
+# Same "does this look like a path" bar as LITERAL_PATH_RE/BACKTICK_PATH_RE
+# above, but for protect-list bullets: either (a) an optional leading
+# `<ROOT>` placeholder followed by one or more `/`-separated segments of
+# word/dot/dash characters (segments may be empty, so a trailing `/` for a
+# directory reference still matches), or (b) a bare filename carrying one of
+# the extensions actually used in that section (`.md`, `.py`, `.toml`,
+# `.csv`, or the `.csv.example` suffix on `trip_tracker.csv.example`) — this
+# second branch is what catches a non-rooted `README.md` or `pyproject.toml`
+# entry that has no `/` at all. A non-path backticked span like `.env` or
+# `RESET` (no `/`, and not one of the extensions above) is deliberately left
+# alone rather than flagged.
+PROTECT_LIST_PATH_LIKE_RE = re.compile(
+    r"^(?:<[A-Za-z_]+>)?[\w.-]*(?:/[\w.-]*)+$"
+    r"|^[\w-]+\.(?:md|py|toml|csv|csv\.example)$"
+)
+PROTECT_LIST_ROOTS = ("<FRAMEWORK_ROOT>", "<DATA_ROOT>")
 
 
 def check_reset_protect_list(reset_text, errors):
     """Every `<FRAMEWORK_ROOT>`-rooted path in commands/reset.md's
     protect-list must actually exist on disk, and every bullet in that
-    section must be `<FRAMEWORK_ROOT>`-rooted — this is an execution-time
-    guard read by an agent with no doc-relative base, so a doc-relative
-    entry (`../tools/`, a bare `tools/`, or a `[text](../README.md)` link)
-    is a bug, not a style nit."""
+    section must be rooted at `<FRAMEWORK_ROOT>` or `<DATA_ROOT>` — this is
+    an execution-time guard read by an agent with no doc-relative base, so a
+    doc-relative entry (`../tools/`, a bare `tools/`, or a
+    `[text](../README.md)` link) is a bug, not a style nit. Only backticked
+    spans that actually look like a path (see PROTECT_LIST_PATH_LIKE_RE) are
+    checked, so an explanatory bullet mentioning e.g. `.env` in passing does
+    not false-positive."""
     if reset_text is None:
         errors.append("commands/reset.md: file does not exist (cannot check protect-list)")
         return
@@ -808,19 +827,19 @@ def check_reset_protect_list(reset_text, errors):
             continue
         for m in BULLET_BACKTICK_PATH_RE.finditer(line):
             path = m.group(1)
-            if "/" not in path and "." not in path:
+            if not PROTECT_LIST_PATH_LIKE_RE.match(path):
                 continue
-            if not path.startswith("<FRAMEWORK_ROOT>"):
+            if not path.startswith(PROTECT_LIST_ROOTS):
                 errors.append(
-                    f"commands/reset.md: protect-list entry is not <FRAMEWORK_ROOT>-rooted: `{path}` "
-                    "(execution-time guard has no doc-relative base; use `<FRAMEWORK_ROOT>/...`)"
+                    f"commands/reset.md: protect-list entry is not rooted: `{path}` "
+                    "(execution-time guard has no doc-relative base; use `<FRAMEWORK_ROOT>/...` or `<DATA_ROOT>/...`)"
                 )
         for m in MD_LINK_RE.finditer(line):
             target = m.group(1)
-            if not target.startswith("<FRAMEWORK_ROOT>"):
+            if not target.startswith(PROTECT_LIST_ROOTS):
                 errors.append(
-                    f"commands/reset.md: protect-list entry is not <FRAMEWORK_ROOT>-rooted: "
-                    f"[{target}] link (execution-time guard has no doc-relative base; use `<FRAMEWORK_ROOT>/...`)"
+                    f"commands/reset.md: protect-list entry is not rooted: "
+                    f"[{target}] link (execution-time guard has no doc-relative base; use `<FRAMEWORK_ROOT>/...` or `<DATA_ROOT>/...`)"
                 )
 
 

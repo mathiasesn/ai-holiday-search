@@ -37,6 +37,9 @@ Let the user start over by clearing personal/generated data under `DATA_ROOT`. F
 the authoritative statement of what that means. This command is destructive and must never act
 without explicit, exact confirmation.
 
+For more on the framework's layout and conventions, see [README](../README.md), [SETUP](../SETUP.md),
+[ARCHI](../ARCHI.md), and [AGENTS](../AGENTS.md).
+
 ## Inputs
 - `$ARGUMENTS` — required, one of `profile`, `watchlist`, `all`. If missing or not one of these three, stop and ask the user which they mean — do not guess or default.
 
@@ -57,7 +60,7 @@ authoritative statement of what must never be touched.
 ### `all`
 - Does everything `profile` and `watchlist` do, **plus**:
 - Deletes: `<DATA_ROOT>/trip_scraper/` state (the seen-candidates registry and any results snapshots).
-- Preserves: all framework/tracked files (see protect-list below), `<DATA_ROOT>/documents/README.md` (the folder layout instructions, if present); `<DATA_ROOT>/documents/past-trips/` and `<DATA_ROOT>/documents/preferences/` themselves are NOT deleted by `/reset all` unless the user separately asks — this command only clears the state covered by the `profile`, `watchlist`, and `all` sections above, not source documents. State this explicitly to the user.
+- Preserves: all framework/tracked files (see protect-list below), `<DATA_ROOT>/documents/README.md` (the folder layout instructions, if present); `<DATA_ROOT>/documents/past-trips/` and `<DATA_ROOT>/documents/preferences/` themselves are NOT deleted by `/reset all` unless the user separately asks — this command only clears the state covered by the `profile`, `watchlist`, and `all` sections above, not source documents. State this explicitly to the user. Also preserves `<DATA_ROOT>/.gitignore` (written by `/setup` in plugin mode, containing `*`) — deleting it would leave the data root unprotected until the next `/setup` run, so it is kept even under `all`.
 
 ## Explicit protect-list (never delete)
 

@@ -1,7 +1,7 @@
 ---
 description: Onboard a traveler profile from documents, a pasted description, or an interview
 argument-hint: "[optional: paste a freeform description of your travel preferences]"
-allowed-tools: Read, Write, Glob, Bash(mkdir:*)
+allowed-tools: Read, Write, Glob, Bash(mkdir:*), Bash(test:*)
 ---
 
 # /setup — Build the traveler profile
@@ -35,7 +35,7 @@ under a guessed root.
 Populate the `<DATA_ROOT>/profile/` folder (`01-traveler-profile.md` … `06-packing-and-prep.md`)
 and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `../skills/holiday-planner/`, so
 `/scrape` and `/plan` have a real profile to evaluate trips against. Also seeds
-`<DATA_ROOT>/profile/tooling.md`, the browser-driver preference (see step 6 for what that is and isn't).
+`<DATA_ROOT>/profile/tooling.md`, the browser-driver preference (see step 7 for what that is and isn't).
 
 ## Inputs
 - `$ARGUMENTS` — optional. If present, treat it as a pasted freeform description (mode b).
@@ -46,7 +46,7 @@ and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `../skills/ho
 ## State touched
 - Reads (never writes): [../skills/holiday-planner/01-traveler-profile.md](../skills/holiday-planner/01-traveler-profile.md) … `06-packing-and-prep.md` (templates with `<!-- FILL IN -->` markers).
 - Writes: `<DATA_ROOT>/profile/01-traveler-profile.md` … `<DATA_ROOT>/profile/06-packing-and-prep.md`.
-- Writes: `<DATA_ROOT>/profile/tooling.md` (browser-driver preference; see step 6) if it does not already exist, or after confirming an overwrite with the user if it does.
+- Writes: `<DATA_ROOT>/profile/tooling.md` (browser-driver preference; see step 7) if it does not already exist, or after confirming an overwrite with the user if it does.
 - Writes: `<DATA_ROOT>/trip_tracker.csv` (copied from `../trip_tracker.csv.example`) if it does not already exist.
 - Never touches `<DATA_ROOT>/documents/`, `../skills/`, or any tracked framework file.
 
@@ -79,8 +79,11 @@ and `<DATA_ROOT>/trip_tracker.csv` from the framework templates in `../skills/ho
 5. **Merge and normalize.** Combine whatever was gathered from modes (a)/(b)/(c) into a single coherent set of answers covering all five interview areas. Flag any area still missing information and ask a final clarifying question before writing files, rather than guessing.
 
 6. **Ensure `<DATA_ROOT>` is gitignored (plugin mode only).** In plugin mode, before writing
-   any profile file, check whether `<DATA_ROOT>/.gitignore` exists. If it does not, create it
-   containing a single line: `*`. This is necessary because `<DATA_ROOT>` is `~/.ai-holiday-search`,
+   any profile file, check whether `<DATA_ROOT>/.gitignore` exists by running
+   `test -f <DATA_ROOT>/.gitignore` (via the `Bash(test:*)` allowance above — `Glob` typically
+   skips dotfiles and `Read` errors on a missing file, so neither gives a clean existence
+   check). If the command exits non-zero, create the file containing a single line: `*`. This
+   is necessary because `<DATA_ROOT>` is `~/.ai-holiday-search`,
    and `$HOME` may itself be a tracked git repo (e.g. a dotfiles repo) — without this file, personal
    profile data written under `~/.ai-holiday-search` could get swept into a commit there. In clone
    mode, skip this step; `DATA_ROOT` is the repo root, already covered by this repo's own `.gitignore`.

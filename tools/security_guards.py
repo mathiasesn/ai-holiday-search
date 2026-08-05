@@ -16,6 +16,12 @@ Checks (stdlib only):
      there. It is NOT a no-op — it still fails if THIS repo's `.gitignore`
      (the one clone-mode users rely on) stops covering any personal path.
   3. No tracked file lives under those personal paths.
+  4. `commands/setup.md` still instructs creating `<DATA_ROOT>/.gitignore`
+     (contents `*`) before writing any profile file, in plugin mode. This
+     guards against a real leak vector: `~/.ai-holiday-search` sits outside
+     any git repo, but `$HOME` itself may be a tracked repo (e.g. dotfiles),
+     so without that step's `.gitignore` running first, personal profile
+     data written there could get swept into an unrelated commit.
 
 Exit 0 on success; non-zero with actionable messages on failure.
 """
@@ -219,18 +225,24 @@ def check_setup_gitignore_step(errors):
         )
         return
 
-    if SETUP_GITIGNORE_CONTENT_TEXT not in text:
-        errors.append(
-            "commands/setup.md: the DATA_ROOT/.gitignore step no longer specifies writing "
-            f"'{SETUP_GITIGNORE_CONTENT_TEXT}' — the step must create the file with contents '*'"
-        )
-        return
-
     profile_write_idx = text.find(SETUP_PROFILE_WRITE_STEP_TEXT)
     if profile_write_idx == -1:
         errors.append(
             "commands/setup.md: missing the profile-writing step "
             f"(expected text: '{SETUP_PROFILE_WRITE_STEP_TEXT}') — cannot verify ordering against the DATA_ROOT/.gitignore step"
+        )
+        return
+
+    # Scope the content assertion to the gitignore step's own span (from its
+    # anchor to the start of the next numbered step) rather than searching the
+    # whole file — otherwise the '*' phrase migrating elsewhere in setup.md
+    # would still satisfy `in text` even if the step itself lost it.
+    step_span = text[gitignore_idx:profile_write_idx] if profile_write_idx > gitignore_idx else text[gitignore_idx:]
+
+    if SETUP_GITIGNORE_CONTENT_TEXT not in step_span:
+        errors.append(
+            "commands/setup.md: the DATA_ROOT/.gitignore step no longer specifies writing "
+            f"'{SETUP_GITIGNORE_CONTENT_TEXT}' — the step must create the file with contents '*'"
         )
         return
 
