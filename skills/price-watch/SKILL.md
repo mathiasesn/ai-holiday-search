@@ -143,6 +143,10 @@ refused the request wastes the navigation and every read after it on each subseq
   "Re-check procedure" — `available: null` plus an `unverified_reason`. Reported as a **blocked
   read**, never as a sold-out warning.
 
+Every reported price and delta above is a web/adapter-read estimate, not a confirmed fact — label
+it as an estimate to verify at booking, and say plainly when a source (adapter, web search, or a
+re-pasted listing) could not confirm it.
+
 ## Removing a trip (`/watch remove`)
 
 Delete `<DATA_ROOT>/watchlist/<slug>.json`. Confirm the slug and destination with the user before deleting.

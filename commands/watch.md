@@ -82,6 +82,12 @@ If this run needs profile data (e.g. resolving `<trip>` against profile-derived 
 3. Report a summary table across all watched trips: destination, dates, previous price, current price, delta, and status (drop / rise / unchanged / sold out / blocked read).
 4. Highlight drops and sold-out warnings first — these are the actionable items. Report blocked reads separately from sold-out warnings; do not let a run with several blocked browser-driven trips read as mass sold-out.
 
+## Notes on uncertainty
+Re-checked prices are frequently not confirmed by a live authoritative source (a stale adapter
+response, a web-search result, or a browser read that got partial data) — this applies to both
+the adapter-backed and pasted branches. Any such figure, and any delta computed from it, must be
+labeled as an estimate to verify at booking — never present a guess as a confirmed fact.
+
 ## Scheduling
 `/watch` (no args) is idempotent, and both adapter-backed and browser-driven trips can now run unattended. Neither an unattended scheduled run nor a manual attended one has yet been exercised against the real sites — verify the first few scheduled runs manually before relying on them. See [../skills/price-watch/SKILL.md](../skills/price-watch/SKILL.md) "Scheduling" and [../ARCHI.md](../ARCHI.md) §7 for the driver rationale and server config.
 
