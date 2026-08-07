@@ -39,9 +39,9 @@ critiqued by a fresh-context reviewer agent before being presented to the user.
 ## Inputs
 - `$ARGUMENTS` — either `<destination>, <nights>, <timing>` (e.g. "Lisbon, 5 nights in March") or pasted freeform listing/package/booking-page text.
 - `<DATA_ROOT>/profile/01-traveler-profile.md` … `<DATA_ROOT>/profile/06-packing-and-prep.md` — must exist and be filled (run `/setup` first if not).
-- [../skills/holiday-planner/03-trip-evaluation.md](../skills/holiday-planner/03-trip-evaluation.md) — fit scoring.
-- [../skills/holiday-planner/04-itinerary-templates.md](../skills/holiday-planner/04-itinerary-templates.md) — day-plan structure and pacing rules.
-- [../skills/holiday-planner/05-budget-rules.md](../skills/holiday-planner/05-budget-rules.md) — budget categories, verification, buffers.
+- `<FRAMEWORK_ROOT>/skills/holiday-planner/03-trip-evaluation.md` — fit scoring.
+- `<FRAMEWORK_ROOT>/skills/holiday-planner/04-itinerary-templates.md` — day-plan structure and pacing rules.
+- `<FRAMEWORK_ROOT>/skills/holiday-planner/05-budget-rules.md` — budget categories, verification, buffers.
 
 ## Output
 - `<DATA_ROOT>/itineraries/<trip-slug>/itinerary.md` — final Markdown itinerary (Markdown only — never PDF), including the verification checklist and a booking to-do list.
@@ -63,14 +63,14 @@ If it's pasted text, extract destination, dates or date window, nights, price if
 ## Step 2 — Evaluate fit
 Load the full profile (`<DATA_ROOT>/profile/01-traveler-profile.md` … `06-packing-and-prep.md`). If `<DATA_ROOT>/profile/` doesn't exist or any file still contains `<!-- FILL IN -->` markers, stop and tell the user to run `/setup` first — do not proceed with a partial profile.
 
-Score the parsed destination/listing against the profile using [../skills/holiday-planner/03-trip-evaluation.md](../skills/holiday-planner/03-trip-evaluation.md) — style, budget, travel time, season, group needs, dealbreakers.
+Score the parsed destination/listing against the profile using `<FRAMEWORK_ROOT>/skills/holiday-planner/03-trip-evaluation.md` — style, budget, travel time, season, group needs, dealbreakers.
 
 **If it's a poor match, say so honestly and up front**, before drafting anything: name the specific violated criteria (e.g. "exceeds your stated max travel time by 3h", "no direct flights and you flagged that as a dealbreaker"). Ask the user whether to proceed anyway, adjust the request, or stop. Only continue to Step 3 once the user confirms they want to proceed (or the fit is clearly good).
 
 ## Step 3 — Draft
 Produce a day-by-day itinerary draft:
-- One entry per day following the structure and pacing limits in [../skills/holiday-planner/04-itinerary-templates.md](../skills/holiday-planner/04-itinerary-templates.md) (e.g. max anchor activities/day, rest-day cadence) as defined in the user's profile. These pacing limits are hard constraints on the draft, not suggestions — do not draft a day that exceeds them.
-- A budget table per [../skills/holiday-planner/05-budget-rules.md](../skills/holiday-planner/05-budget-rules.md) with rows for: transport, stay, activities, food estimate, buffer. Use the profile's currency (EUR default, DKK noted if relevant). Mark every estimated figure as a web-search estimate, not a confirmed price.
+- One entry per day following the structure and pacing limits in `<FRAMEWORK_ROOT>/skills/holiday-planner/04-itinerary-templates.md` (e.g. max anchor activities/day, rest-day cadence) as defined in the user's profile. These pacing limits are hard constraints on the draft, not suggestions — do not draft a day that exceeds them.
+- A budget table per `<FRAMEWORK_ROOT>/skills/holiday-planner/05-budget-rules.md` with rows for: transport, stay, activities, food estimate, buffer. Use the profile's currency (EUR default, DKK noted if relevant). Mark every estimated figure as a web-search estimate, not a confirmed price.
 - Keep this as a working draft in memory/scratch — do not present it to the user yet.
 
 ## Step 4 — Spawn a reviewer agent with fresh context
