@@ -29,9 +29,11 @@ jobs:
       # actual `git clone` round trip (not merely that they exist in the
       # working tree checked out by actions/checkout). lint_skills.py itself
       # now asserts the readlink text, dangling-ness, and non-empty-dir for
-      # these symlinks (tools/lint_skills.py's check_symlink_integrity), so
-      # running it again inside a fresh clone is sufficient — no separate
-      # hardcoded per-file assertions needed here.
+      # these symlinks (tools/lint_skills.py's check_symlink_integrity), and
+      # security_guards.py asserts no personal data got tracked and
+      # .gitignore coverage is intact (check_personal_paths_not_tracked,
+      # check_gitignore_coverage) — both are equally worth re-running against
+      # the cloned tree, not just the working tree actions/checkout produced.
       - name: Clone the checkout and re-run lint inside it
         run: |
           set -e
@@ -39,6 +41,7 @@ jobs:
           cd /tmp/clone-test
           uv sync
           uv run python tools/lint_skills.py
+          uv run python tools/security_guards.py
 
   adapter-smoke:
     runs-on: ubuntu-latest

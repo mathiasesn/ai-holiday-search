@@ -1,7 +1,7 @@
 ---
 description: Destructively clear local profile, watchlist, or all generated state (requires typing RESET to confirm)
 argument-hint: "profile | watchlist | all"
-allowed-tools: Read, Bash(rm:*), Glob
+allowed-tools: Read, Bash(rm:*), Glob, Bash(ls:*), Bash(find:*)
 ---
 
 # /reset — Wipe local generated/personal state
