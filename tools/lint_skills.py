@@ -48,7 +48,16 @@ import re
 import subprocess
 import sys
 
-from _repo import ADAPTER_CRED_VARS, PERSONAL_DIRS, PERSONAL_FILES, repo_root, ignored_paths, tracked_modes
+from _repo import (
+    ADAPTER_CRED_VARS,
+    FRAMEWORK_DIRS,
+    FRAMEWORK_FILES,
+    PERSONAL_DIRS,
+    PERSONAL_FILES,
+    repo_root,
+    ignored_paths,
+    tracked_modes,
+)
 
 REPO_ROOT = repo_root()
 
@@ -469,24 +478,26 @@ ROOT_TOKENS = ("<FRAMEWORK_ROOT>", "<DATA_ROOT>")
 ROOTED_SPAN_RE = re.compile(
     "(?:" + "|".join(re.escape(t) for t in ROOT_TOKENS) + r")/[\w./-]*"
 )
-# An unrooted `skills/...` or `commands/...` reference to a concrete file
-# (ending .md/.py) is a runtime read target that should be rooted at
-# <FRAMEWORK_ROOT>, same class as the .agents/skills/*/search.py case.
-# Requiring a .md/.py suffix (rather than any skills/commands/ mention)
-# keeps this from flagging bare structural prose like "the `commands/`
-# directory" or glob notation like `skills/*/SKILL.md` (the `*` breaks the
-# [\w.-]+ segment match, so glob prose is left alone, same rationale as
-# LITERAL_PATH_RE elsewhere in this file).
-UNROOTED_SKILLS_OR_COMMANDS_RE = re.compile(
-    r"(?<![\w.-])(?:skills|commands)/[\w.-]+(?:/[\w.-]+)*\.(?:md|py)\b"
-)
-# Same class of runtime read target as the skills/commands case above, but
-# for the one bare filename outside those two directories:
-# trip_tracker.csv.example (setup.md's onboarding-template read). No
-# directory prefix to anchor on, so this matches the bare filename itself
-# rather than reusing UNROOTED_SKILLS_OR_COMMANDS_RE's skills|commands stem.
-UNROOTED_TRIP_TRACKER_EXAMPLE_RE = re.compile(
-    r"(?<![\w.-])trip_tracker\.csv\.example\b"
+_FRAMEWORK_DIR_ALT = "|".join(re.escape(d) for d in FRAMEWORK_DIRS)
+_FRAMEWORK_FILE_ALT = "|".join(re.escape(f) for f in FRAMEWORK_FILES)
+# An unrooted reference to a framework file — either under a framework
+# directory (`skills/x.md`, `commands/x.md`) or a bare framework filename
+# with no directory to anchor on (`trip_tracker.csv.example`) — is a runtime
+# read target that should be rooted at <FRAMEWORK_ROOT>, same class as the
+# .agents/skills/*/search.py case. Built from the shared _repo tuples so the
+# guarded set is data, not a regex per file.
+#
+# Requiring a .md/.py suffix on the directory form (rather than any
+# skills/commands/ mention) keeps it from flagging bare structural prose like
+# "the `commands/` directory" or glob notation like `skills/*/SKILL.md` (the
+# `*` breaks the [\w.-]+ segment match, same rationale as LITERAL_PATH_RE
+# elsewhere in this file). The `.agents/` lookbehind leaves the adapter case
+# to SEARCH_PY_RE, which knows the correct rooted form for it — without it,
+# one bad adapter path draws two errors, the second naming a wrong fix.
+UNROOTED_FRAMEWORK_FILE_RE = re.compile(
+    rf"(?<![\w.-])(?<!\.agents/)"
+    rf"(?:(?:{_FRAMEWORK_DIR_ALT})/[\w.-]+(?:/[\w.-]+)*\.(?:md|py)"
+    rf"|(?:{_FRAMEWORK_FILE_ALT}))\b"
 )
 
 
@@ -529,8 +540,7 @@ ROOTING_CHECKS = (
     (CLAUDE_DIR_RE, _rooting_check_claude_dir),
     (SEARCH_PY_RE, _rooting_check_search_py),
     (BARE_PERSONAL_PATH_RE, _rooting_check_personal_path),
-    (UNROOTED_SKILLS_OR_COMMANDS_RE, _rooting_check_framework_file),
-    (UNROOTED_TRIP_TRACKER_EXAMPLE_RE, _rooting_check_framework_file),
+    (UNROOTED_FRAMEWORK_FILE_RE, _rooting_check_framework_file),
 )
 
 

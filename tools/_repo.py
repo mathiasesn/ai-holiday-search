@@ -17,6 +17,13 @@ import subprocess
 PERSONAL_DIRS = ("profile", "itineraries", "watchlist", "trip_scraper")
 PERSONAL_FILES = ("trip_tracker.csv",)
 
+# Framework-file path names, the <FRAMEWORK_ROOT> counterpart to the two
+# tuples above. A command file that names one of these is naming something it
+# reads at execution time, so the reference must be rooted. Registering a new
+# guarded framework file is a one-word edit here rather than a new regex.
+FRAMEWORK_DIRS = ("skills", "commands")
+FRAMEWORK_FILES = ("trip_tracker.csv.example",)
+
 # Adapter credential env var names shared by tools/lint_skills.py,
 # tools/security_guards.py, and (via a derivation step) .github/workflows/ci.yml.
 ADAPTER_CRED_VARS = (

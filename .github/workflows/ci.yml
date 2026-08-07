@@ -25,16 +25,12 @@ jobs:
       - name: Run security guards
         run: uv run python tools/security_guards.py
 
-      # Prove the .claude/commands and .claude/skills symlinks survive an
-      # actual `git clone` round trip (not merely that they exist in the
-      # working tree checked out by actions/checkout). lint_skills.py itself
-      # now asserts the readlink text, dangling-ness, and non-empty-dir for
-      # these symlinks (tools/lint_skills.py's check_symlink_integrity), and
-      # security_guards.py asserts no personal data got tracked and
-      # .gitignore coverage is intact (check_personal_paths_not_tracked,
-      # check_gitignore_coverage) — both are equally worth re-running against
-      # the cloned tree, not just the working tree actions/checkout produced.
-      - name: Clone the checkout and re-run lint inside it
+      # Re-run both linters against a real `git clone` rather than the working
+      # tree actions/checkout produced. That round trip is the only place the
+      # assertions that depend on what git actually records — symlink text and
+      # dangling-ness, tracked-file and .gitignore coverage — are tested
+      # against a checkout a user would get.
+      - name: Clone the checkout and re-run both linters inside it
         run: |
           set -e
           git clone "$PWD" /tmp/clone-test

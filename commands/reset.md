@@ -1,7 +1,7 @@
 ---
 description: Destructively clear local profile, watchlist, or all generated state (requires typing RESET to confirm)
 argument-hint: "profile | watchlist | all"
-allowed-tools: Read, Bash(rm:*), Glob, Bash(ls:*), Bash(find:*)
+allowed-tools: Read, Glob, Bash(ls:*), Bash(rm:*)
 ---
 
 # /reset — Wipe local generated/personal state
@@ -91,7 +91,7 @@ before it runs.
 ## Steps
 
 1. Parse `$ARGUMENTS`. If it isn't exactly `profile`, `watchlist`, or `all`, ask the user to specify one of the three and stop.
-2. **Enumerate the exact files/directories that will be deleted** for the requested mode, using the lists above — check what actually exists on disk under `<DATA_ROOT>` (e.g. `ls <DATA_ROOT>/profile/ <DATA_ROOT>/watchlist/ <DATA_ROOT>/trip_scraper/` / `find` as appropriate) and print the real, concrete absolute file paths, not just the category. If a target directory doesn't exist or is already empty, say so (nothing to delete there).
+2. **Enumerate the exact files/directories that will be deleted** for the requested mode, using the lists above — check what actually exists on disk under `<DATA_ROOT>` (e.g. `ls -A <DATA_ROOT>/profile/ <DATA_ROOT>/watchlist/ <DATA_ROOT>/trip_scraper/`, or `Glob`) and print the real, concrete absolute file paths, not just the category. Enumerate with read-only tools only — this step's job is to *show* what will be deleted before the user authorizes it, so it must not be able to delete anything itself. If a target directory doesn't exist or is already empty, say so (nothing to delete there).
 3. State clearly what is **preserved** (the relevant bullet list above), so the user knows framework/tracked files are safe.
 4. Ask the user to **type `RESET` verbatim** to confirm. Do not proceed on "yes", "y", "confirm", or any other input — only the exact string `RESET` (case-sensitive) authorizes deletion. Any other response aborts with no changes made.
 5. On confirmation, delete exactly the enumerated files/directories from step 2 — nothing more, respecting the protect-list above.
