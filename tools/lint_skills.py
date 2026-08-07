@@ -478,7 +478,15 @@ ROOTED_SPAN_RE = re.compile(
 # [\w.-]+ segment match, so glob prose is left alone, same rationale as
 # LITERAL_PATH_RE elsewhere in this file).
 UNROOTED_SKILLS_OR_COMMANDS_RE = re.compile(
-    r"(?<![\w/.-])(?:skills|commands)/[\w.-]+(?:/[\w.-]+)*\.(?:md|py)\b"
+    r"(?<![\w.-])(?:skills|commands)/[\w.-]+(?:/[\w.-]+)*\.(?:md|py)\b"
+)
+# Same class of runtime read target as the skills/commands case above, but
+# for the one bare filename outside those two directories:
+# trip_tracker.csv.example (setup.md's onboarding-template read). No
+# directory prefix to anchor on, so this matches the bare filename itself
+# rather than reusing UNROOTED_SKILLS_OR_COMMANDS_RE's skills|commands stem.
+UNROOTED_TRIP_TRACKER_EXAMPLE_RE = re.compile(
+    r"(?<![\w.-])trip_tracker\.csv\.example\b"
 )
 
 
@@ -505,7 +513,9 @@ def _rooting_check_personal_path(m, rel, line_no, line):
     return f"{rel}:{line_no}: unrooted 'trip_tracker.csv' reference (should be <DATA_ROOT>/trip_tracker.csv): {line.strip()!r}"
 
 
-def _rooting_check_skills_or_commands(m, rel, line_no, line):
+def _rooting_check_framework_file(m, rel, line_no, line):
+    """Shared by every regex whose whole match is the path that should have
+    been rooted — `skills/x.md`, `commands/x.md`, `trip_tracker.csv.example`."""
     return (
         f"{rel}:{line_no}: unrooted framework-file reference '{m.group(0)}' "
         f"(should be <FRAMEWORK_ROOT>/{m.group(0)}): {line.strip()!r}"
@@ -519,7 +529,8 @@ ROOTING_CHECKS = (
     (CLAUDE_DIR_RE, _rooting_check_claude_dir),
     (SEARCH_PY_RE, _rooting_check_search_py),
     (BARE_PERSONAL_PATH_RE, _rooting_check_personal_path),
-    (UNROOTED_SKILLS_OR_COMMANDS_RE, _rooting_check_skills_or_commands),
+    (UNROOTED_SKILLS_OR_COMMANDS_RE, _rooting_check_framework_file),
+    (UNROOTED_TRIP_TRACKER_EXAMPLE_RE, _rooting_check_framework_file),
 )
 
 
