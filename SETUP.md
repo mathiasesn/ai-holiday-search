@@ -54,12 +54,45 @@ Inside Claude Code:
 /plugin install ai-holiday-search
 ```
 
+This needs `.claude-plugin/` present on the repo's default branch — as of this writing it
+only exists on an unmerged branch, so the command above currently fails with `Error:
+Marketplace file not found at .../.claude-plugin/marketplace.json`. Until it's merged, you
+can install from a local checkout instead:
+
+```
+/plugin marketplace add /path/to/ai-holiday-search
+/plugin install ai-holiday-search@ai-holiday-search
+```
+
+This fallback is a *directory-source* install — see the warning below for what that means
+before you use it.
+
 The repo is its own marketplace (`.claude-plugin/marketplace.json`), so this needs no
 separate registry. Once installed, the plugin's top-level `commands/`, `skills/`, and
 root `.mcp.json` are auto-discovered — the same five slash commands and the same two
 Playwright MCP servers as clone mode, with nothing to configure. Skip to step 3 (dependency
 install is only needed for clone mode, since the plugin's Python adapters run via `uv run`
 against their own PEP 723 headers regardless).
+
+Installed commands register namespaced — `/ai-holiday-search:setup`,
+`/ai-holiday-search:scrape`, and so on — not the bare `/setup` shown elsewhere in this
+guide. On the Claude Code version this was tested on, typing the bare form still resolved
+correctly via fuzzy matching, but that's an observed convenience, not the command's real
+name in plugin mode; the namespaced form is what's actually registered. (In clone mode the
+bare form is the real name.)
+
+**Directory-source installs copy your whole working tree, gitignored files included.**
+Adding a marketplace from a local path (as above) is a "directory source": Claude Code
+makes a real copy of the checkout — not a symlink — at
+`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`, and that copy includes
+whatever gitignored personal state exists in the checkout at install time: `profile/`,
+`watchlist/`, `trip_scraper/`, `documents/`, `itineraries/`, `trip_tracker.csv`,
+`.claude/settings.local.json`, and `.playwright-mcp/` (which, per `ARCHI.md` §9, can
+contain the runner's public IP). This only affects local-path (directory-source) installs
+— a GitHub-source install carries only tracked files and is unaffected. If you installed
+from a local path, remove the cached copy with
+`rm -rf ~/.claude/plugins/cache/<marketplace>`. Tracked as
+[issue #22](https://github.com/mathiasesn/ai-holiday-search/issues/22).
 
 ### Option B — Fork and clone
 
@@ -121,8 +154,12 @@ claude
 Then inside Claude Code:
 
 ```
-/setup
+/ai-holiday-search:setup
 ```
+
+(Plugin installs register commands namespaced like this; see step 1. In clone mode, or if
+fuzzy matching resolves it for you, the bare `/setup` shown throughout the rest of this
+guide works too.)
 
 `/setup` auto-detects what you have and offers three modes:
 

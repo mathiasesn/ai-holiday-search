@@ -39,6 +39,11 @@ files ready      with fit ratings        budget (day-by-day)     price drops
                  -> /plan                -> Revise -> Final itinerary
 ```
 
+Installed as a plugin, these register namespaced (`/ai-holiday-search:setup`,
+`/ai-holiday-search:scrape`, `/ai-holiday-search:plan`, `/ai-holiday-search:watch`) —
+typing the bare form above still resolves via fuzzy match. See [SETUP.md](SETUP.md) for
+install caveats.
+
 The framework encodes trip-planning best practices: structured fit criteria, realistic pacing (no 6-museums-a-day itineraries), budget verification, and a second-agent review that checks the plan against reality — opening hours, seasonal weather, local events, and known tourist traps.
 
 ## Install
