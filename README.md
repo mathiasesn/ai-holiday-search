@@ -37,12 +37,12 @@ files ready      with fit ratings        budget (day-by-day)     price drops
                      v                        v
                  Pick a match            Reviewer agent critiques
                  -> /plan                -> Revise -> Final itinerary
+
+Installed as a plugin: /ai-holiday-search:setup  /ai-holiday-search:scrape  /ai-holiday-search:plan  /ai-holiday-search:watch
 ```
 
-Installed as a plugin, these register namespaced (`/ai-holiday-search:setup`,
-`/ai-holiday-search:scrape`, `/ai-holiday-search:plan`, `/ai-holiday-search:watch`) —
-typing the bare form above still resolves via fuzzy match. See [SETUP.md](SETUP.md) for
-install caveats.
+The bare form above still resolves via fuzzy match when installed as a plugin. See
+[SETUP.md](SETUP.md) for install caveats.
 
 The framework encodes trip-planning best practices: structured fit criteria, realistic pacing (no 6-museums-a-day itineraries), budget verification, and a second-agent review that checks the plan against reality — opening hours, seasonal weather, local events, and known tourist traps.
 
@@ -55,7 +55,10 @@ Two ways to get this running, both fully supported:
   /plugin marketplace add mathiasesn/ai-holiday-search
   /plugin install ai-holiday-search
   ```
-  The repo is its own marketplace. Your traveler profile and all generated state live in
+  This needs `.claude-plugin/` on the default branch, which isn't merged yet, so the
+  command above fails until then — see [SETUP.md](SETUP.md) for the working local-path
+  fallback **and a data-leak warning you should read before using it**. The repo is its
+  own marketplace. Your traveler profile and all generated state live in
   `~/.ai-holiday-search/` (shared across every project you use the plugin from), never in
   a project directory — nothing personal is ever written where you're working.
 - **Fork/clone** — for people who want to modify the framework itself (edit commands,

@@ -9,7 +9,7 @@ distribution route: an installed Claude Code plugin, or a fresh fork/clone.
 | --- | --- | --- |
 | When to use it | You just want to use the framework | You want to modify commands, skills, or add a search source |
 | Where your data lives | `~/.ai-holiday-search/` (one profile, shared across every project) | Inside the repo checkout (gitignored) |
-| Setup effort | Two `/plugin` commands, no clone | `gh repo fork` + `git clone` |
+| Setup effort | Two `/plugin` commands once the GitHub route works; today, one local-path `/plugin` fallback (see step 1) | `gh repo fork` + `git clone` |
 | Works from a downloaded ZIP or a Windows checkout without symlink support | Yes | No — see the note in step 1 |
 
 Both routes run the identical five commands and the same two Playwright MCP servers.
@@ -89,9 +89,12 @@ whatever gitignored personal state exists in the checkout at install time: `prof
 `watchlist/`, `trip_scraper/`, `documents/`, `itineraries/`, `trip_tracker.csv`,
 `.claude/settings.local.json`, and `.playwright-mcp/` (which, per `ARCHI.md` §9, can
 contain the runner's public IP). This only affects local-path (directory-source) installs
-— a GitHub-source install carries only tracked files and is unaffected. If you installed
-from a local path, remove the cached copy with
-`rm -rf ~/.claude/plugins/cache/<marketplace>`. Tracked as
+— a GitHub-source install should carry only tracked files and be unaffected, but that
+route was not exercised (it currently fails, per above), so this is an inference, not a
+confirmed result. If you installed from a local path, remove the cached copy with
+`rm -rf ~/.claude/plugins/cache/<marketplace>` — note this also removes the working
+installed plugin itself, not just the leaked personal data, so you'll need to reinstall
+afterward. Tracked as
 [issue #22](https://github.com/mathiasesn/ai-holiday-search/issues/22).
 
 ### Option B — Fork and clone
