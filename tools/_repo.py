@@ -24,6 +24,27 @@ PERSONAL_FILES = ("trip_tracker.csv",)
 FRAMEWORK_DIRS = ("skills", "commands")
 FRAMEWORK_FILES = ("trip_tracker.csv.example",)
 
+# Shell verbs that may irreversibly destroy or move data. A `Bash(<verb>:*)`
+# grant for one of these is only permitted when the body backtick-invokes the
+# verb, or the command's frontmatter carries a `destructive-tools-justification`
+# entry naming and explaining it — an unused destructive grant is exactly the
+# over-permission `Bash(find:*)` regression this check exists to catch.
+DESTRUCTIVE_SHELL_VERBS = ("rm", "find", "mv", "dd", "truncate", "chmod")
+
+# Guarded verbs that cannot destroy data: a grant the body never uses is
+# harmless here, so only the body -> grant direction applies to these.
+SAFE_SHELL_VERBS = ("ls", "mkdir", "test", "cp", "cat", "sed", "git", "curl", "uv", "python")
+
+# Every verb whose backticked appearance in a commands/*.md body must be
+# matched by an `allowed-tools` grant (bare `Bash` or `Bash(<verb>:*)`), used
+# by tools/lint_skills.py's check_allowed_tools_match_body. Composed from the
+# two tuples above so DESTRUCTIVE_SHELL_VERBS is a subset by construction
+# rather than by comment — listing them separately let `dd`, `truncate`, and
+# `chmod` fall out of the guarded set while the comment still claimed they
+# were in it. Registering a new verb a command body legitimately shells out
+# to is a one-word edit to whichever tuple above it belongs in.
+GUARDED_SHELL_VERBS = DESTRUCTIVE_SHELL_VERBS + SAFE_SHELL_VERBS
+
 # Adapter credential env var names shared by tools/lint_skills.py,
 # tools/security_guards.py, and (via a derivation step) .github/workflows/ci.yml.
 ADAPTER_CRED_VARS = (

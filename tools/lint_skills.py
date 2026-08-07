@@ -50,8 +50,10 @@ import sys
 
 from _repo import (
     ADAPTER_CRED_VARS,
+    DESTRUCTIVE_SHELL_VERBS,
     FRAMEWORK_DIRS,
     FRAMEWORK_FILES,
+    GUARDED_SHELL_VERBS,
     PERSONAL_DIRS,
     PERSONAL_FILES,
     repo_root,
@@ -887,6 +889,160 @@ def check_reset_protect_list(reset_text, errors):
                 unrooted("mode delete/preserve target", f"[{target}] link")
 
 
+# Matches a single qualified grant like `Bash(rm:*)`, capturing the verb.
+ALLOWED_TOOLS_BASH_RE = re.compile(r"^Bash\((\w+):\*\)$")
+# One `destructive-tools-justification` entry: `Bash(<verb>:*) — <reason>`.
+# Accepts a plain hyphen too, not just the em/en dash shown in the spec
+# example, so a human retyping the key doesn't get bounced on punctuation.
+JUSTIFICATION_ENTRY_RE = re.compile(r"^Bash\((\w+):\*\)\s*[-–—]\s*(.*)$")
+
+
+# Membership-lookup views of the _repo.py tuples, which stay tuples there to
+# match FRAMEWORK_DIRS / ADAPTER_CRED_VARS and to keep the subset relation
+# between them literal.
+GUARDED_VERB_SET = frozenset(GUARDED_SHELL_VERBS)
+DESTRUCTIVE_VERB_SET = frozenset(DESTRUCTIVE_SHELL_VERBS)
+
+
+def _line_no(text, char_offset):
+    return text.count("\n", 0, char_offset) + 1
+
+
+def _backtick_leading_tokens(body):
+    """Return `(first_token, match)` for every backticked span in `body` whose
+    leading whitespace-delimited token looks like a bare shell verb (non-empty,
+    containing neither `/` nor `.`, which excludes paths and filenames).
+
+    Kept as one function because it is the single definition of "what counts as
+    a backticked invocation" for both directions of
+    `check_allowed_tools_match_body`; inlining it into each would let the two
+    directions drift on which spans they consider.
+    """
+    tokens = []
+    for m in BACKTICK_SPAN_RE.finditer(body):
+        parts = m.group(1).split(None, 1)
+        if not parts:
+            continue
+        first_token = parts[0]
+        if "/" in first_token or "." in first_token:
+            continue
+        tokens.append((first_token, m))
+    return tokens
+
+
+def check_allowed_tools_match_body(command_files, texts, parsed, errors):
+    """Cross-check each commands/*.md `allowed-tools` grant list against what
+    the command body actually backtick-invokes, in two directions:
+
+    1. Body -> grant (under-permission), all `_repo.GUARDED_SHELL_VERBS`. This
+       is the `reset.md` step-2 failure from e0d76ae: the body said `ls` and
+       the frontmatter withheld `Bash(ls:*)`.
+    2. Grant -> body (over-permission), `_repo.DESTRUCTIVE_SHELL_VERBS` only —
+       satisfied by a backticked invocation or a `destructive-tools-justification`
+       entry. This is the direction that would have caught the `Bash(find:*)`
+       over-grant from the same PR. An unused *non*-destructive grant is not an
+       error: forcing prose rewrites to use up a harmless grant isn't worth it.
+
+    KNOWN LIMITATION, DELIBERATE: `plan.md`, `scrape.md`, and `watch.md` grant
+    unqualified `Bash`, which satisfies both directions implicitly, so this
+    check is a no-op for those three today. Narrowing that grant is a
+    permissions audit, tracked separately — a green run here does NOT mean
+    those three are permission-audited.
+
+    KNOWN LIMITATION, LEXICAL: this is a scan of backticked spans, not a shell
+    parser, and is approximate both ways. A backticked span starting with a
+    guarded word that isn't an invocation is a possible false positive (only
+    partly mitigated by rejecting first tokens containing `/` or `.`), and an
+    instruction given in prose alone carries no backticks and is invisible.
+    It catches the class of defect that occurred, not all of them.
+    """
+    for path in command_files:
+        rel = os.path.relpath(path, REPO_ROOT)
+        text = texts[path]
+        fm, body, body_start = parsed[path]
+        if fm is None:
+            continue
+
+        allowed_raw = fm.get("allowed-tools", "")
+        bare_bash = False
+        granted_verbs = set()
+        for token in allowed_raw.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            if token == "Bash":
+                bare_bash = True
+                continue
+            m = ALLOWED_TOOLS_BASH_RE.match(token)
+            if m:
+                granted_verbs.add(m.group(1))
+
+        # Single shared scan of the body's backticked spans, used by both
+        # directions below.
+        leading_tokens = _backtick_leading_tokens(body)
+
+        # --- Direction 1: body -> grant, all guarded verbs ---
+        for first_token, m in leading_tokens:
+            if first_token not in GUARDED_VERB_SET:
+                continue
+            if bare_bash or first_token in granted_verbs:
+                continue
+            line_no = _line_no(text, body_start + m.start())
+            errors.append(
+                f"{rel}:{line_no}: body invokes `{first_token}` but 'allowed-tools' grants "
+                f"neither bare 'Bash' nor 'Bash({first_token}:*)' — add the missing grant"
+            )
+
+        # --- destructive-tools-justification frontmatter key ---
+        justification_raw = fm.get("destructive-tools-justification")
+        justified_verbs = set()
+        if justification_raw:
+            for entry in justification_raw.split(";"):
+                entry = entry.strip()
+                if not entry:
+                    continue
+                jm = JUSTIFICATION_ENTRY_RE.match(entry)
+                if not jm:
+                    errors.append(
+                        f"{rel}: malformed 'destructive-tools-justification' entry "
+                        f"(expected 'Bash(<verb>:*) — <reason>'): {entry!r}"
+                    )
+                    continue
+                verb, reason = jm.group(1), jm.group(2).strip()
+                justified_verbs.add(verb)
+                if verb not in granted_verbs:
+                    errors.append(
+                        f"{rel}: 'destructive-tools-justification' names 'Bash({verb}:*)' "
+                        "which is not in 'allowed-tools' — stale justification"
+                    )
+                elif len(reason.split()) < 2:
+                    errors.append(
+                        f"{rel}: 'destructive-tools-justification' reason for 'Bash({verb}:*)' "
+                        f"is empty or a single word: {reason!r}"
+                    )
+
+        destructive_grants = granted_verbs & DESTRUCTIVE_VERB_SET
+
+        if justification_raw and not destructive_grants:
+            errors.append(
+                f"{rel}: 'destructive-tools-justification' is set but 'allowed-tools' grants "
+                "no destructive verb — remove the key"
+            )
+
+        # --- Direction 2: grant -> body, destructive verbs only ---
+        invoked_verbs = {first_token for first_token, _ in leading_tokens}
+
+        for verb in sorted(destructive_grants):
+            if verb in invoked_verbs:
+                continue
+            if verb in justified_verbs:
+                continue
+            errors.append(
+                f"{rel}: 'allowed-tools' grants destructive 'Bash({verb}:*)' but the body never "
+                f"invokes `{verb}` — add a 'destructive-tools-justification' entry or drop the grant"
+            )
+
+
 def main():
     errors = []
 
@@ -913,6 +1069,9 @@ def main():
 
     literal_by_file = {}
     body_start_by_file = {}
+    # path -> (fm, body, body_start), so downstream checks consume the one
+    # parse done here instead of re-running parse_frontmatter themselves.
+    parsed_by_file = {}
 
     # SKILL.md needs `name` too; commands take theirs from the filename. The
     # required-key tuple is the only difference, so the per-file bookkeeping
@@ -929,6 +1088,7 @@ def main():
             else:
                 _validate_frontmatter_keys(rel, path, fm, errors, required_keys)
             body_start_by_file[path] = body_start
+            parsed_by_file[path] = (fm, body, body_start)
             literal_by_file[path] = check_links(rel, os.path.dirname(path), body, errors)
 
     # Non-SKILL.md reference docs (skills/holiday-planner/01-*.md …
@@ -971,6 +1131,7 @@ def main():
     check_agents_skills_structure(agents_skills_dir, adapter_dir_names, errors)
     check_adapter_contract(agents_skills_dir, adapter_dir_names, errors)
     check_path_resolution_block(command_files, texts, errors)
+    check_allowed_tools_match_body(command_files, texts, parsed_by_file, errors)
 
     # .agents/skills/*/SKILL.md deliberately excluded: those adapters are
     # designed to be copied out standalone and legitimately document a bare
