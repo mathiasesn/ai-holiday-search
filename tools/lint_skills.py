@@ -893,25 +893,22 @@ def main():
     literal_by_file = {}
     body_start_by_file = {}
 
-    for path in top_skill_files:
-        rel = os.path.relpath(path, REPO_ROOT)
-        fm, body, body_start = parse_frontmatter(texts[path], rel, errors)
-        if fm is None:
-            errors.append(f"{rel}: missing or malformed YAML frontmatter (expected leading '---' block)")
-        else:
-            _validate_frontmatter_keys(rel, path, fm, errors, ("name", "description"))
-        body_start_by_file[path] = body_start
-        literal_by_file[path] = check_links(rel, os.path.dirname(path), body, errors)
-
-    for path in command_files:
-        rel = os.path.relpath(path, REPO_ROOT)
-        fm, body, body_start = parse_frontmatter(texts[path], rel, errors)
-        if fm is None:
-            errors.append(f"{rel}: missing or malformed YAML frontmatter (expected leading '---' block)")
-        else:
-            _validate_frontmatter_keys(rel, path, fm, errors, ("description",))
-        body_start_by_file[path] = body_start
-        literal_by_file[path] = check_links(rel, os.path.dirname(path), body, errors)
+    # SKILL.md needs `name` too; commands take theirs from the filename. The
+    # required-key tuple is the only difference, so the per-file bookkeeping
+    # below stays in one place rather than being kept in sync by hand.
+    for paths, required_keys in (
+        (top_skill_files, ("name", "description")),
+        (command_files, ("description",)),
+    ):
+        for path in paths:
+            rel = os.path.relpath(path, REPO_ROOT)
+            fm, body, body_start = parse_frontmatter(texts[path], rel, errors)
+            if fm is None:
+                errors.append(f"{rel}: missing or malformed YAML frontmatter (expected leading '---' block)")
+            else:
+                _validate_frontmatter_keys(rel, path, fm, errors, required_keys)
+            body_start_by_file[path] = body_start
+            literal_by_file[path] = check_links(rel, os.path.dirname(path), body, errors)
 
     # Non-SKILL.md reference docs (skills/holiday-planner/01-*.md …
     # 06-*.md, skills/trip-scraper/search-queries.md) get no frontmatter
