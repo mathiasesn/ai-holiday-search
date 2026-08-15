@@ -930,6 +930,33 @@ def _backtick_leading_tokens(body):
     return tokens
 
 
+def check_no_bare_bash_grant(command_files, parsed, errors):
+    """Reject an unqualified `Bash` token in any commands/*.md `allowed-tools`.
+
+    `allowed-tools` is the only enforcement boundary on what an agent executing
+    a command may do, and bare `Bash` permits every shell verb — including `rm`,
+    `dd`, and `chmod` — regardless of what the body asks for. It also made
+    `check_allowed_tools_match_body` a no-op for any file carrying it, since it
+    satisfied both of that check's directions implicitly. Keeping this a hard
+    error is what stops that hole from reopening silently.
+
+    Deliberately a separate check from `check_allowed_tools_match_body`: this is
+    a rule about the *shape* of a grant and never consults the body, so it has
+    no data flow into or out of the cross-check.
+    """
+    for path in command_files:
+        fm, _body, _body_start = parsed[path]
+        if fm is None:
+            continue
+        tokens = [t.strip() for t in fm.get("allowed-tools", "").split(",")]
+        if "Bash" in tokens:
+            rel = os.path.relpath(path, REPO_ROOT)
+            errors.append(
+                f"{rel}: 'allowed-tools' grants bare 'Bash' — qualify each grant as "
+                "'Bash(<verb>:*)' instead"
+            )
+
+
 def check_allowed_tools_match_body(command_files, texts, parsed, errors):
     """Cross-check each commands/*.md `allowed-tools` grant list against what
     the command body actually backtick-invokes, in two directions:
@@ -942,12 +969,6 @@ def check_allowed_tools_match_body(command_files, texts, parsed, errors):
        entry. This is the direction that would have caught the `Bash(find:*)`
        over-grant from the same PR. An unused *non*-destructive grant is not an
        error: forcing prose rewrites to use up a harmless grant isn't worth it.
-
-    KNOWN LIMITATION, DELIBERATE: `plan.md`, `scrape.md`, and `watch.md` grant
-    unqualified `Bash`, which satisfies both directions implicitly, so this
-    check is a no-op for those three today. Narrowing that grant is a
-    permissions audit, tracked separately — a green run here does NOT mean
-    those three are permission-audited.
 
     KNOWN LIMITATION, LEXICAL: this is a scan of backticked spans, not a shell
     parser, and is approximate both ways. A backticked span starting with a
@@ -964,16 +985,10 @@ def check_allowed_tools_match_body(command_files, texts, parsed, errors):
             continue
 
         allowed_raw = fm.get("allowed-tools", "")
-        bare_bash = False
         granted_verbs = set()
         for token in allowed_raw.split(","):
             token = token.strip()
-            if not token:
-                continue
-            if token == "Bash":
-                bare_bash = True
-                continue
-            m = ALLOWED_TOOLS_BASH_RE.match(token)
+            m = ALLOWED_TOOLS_BASH_RE.match(token) if token else None
             if m:
                 granted_verbs.add(m.group(1))
 
@@ -985,12 +1000,12 @@ def check_allowed_tools_match_body(command_files, texts, parsed, errors):
         for first_token, m in leading_tokens:
             if first_token not in GUARDED_VERB_SET:
                 continue
-            if bare_bash or first_token in granted_verbs:
+            if first_token in granted_verbs:
                 continue
             line_no = _line_no(text, body_start + m.start())
             errors.append(
-                f"{rel}:{line_no}: body invokes `{first_token}` but 'allowed-tools' grants "
-                f"neither bare 'Bash' nor 'Bash({first_token}:*)' — add the missing grant"
+                f"{rel}:{line_no}: body invokes `{first_token}` but 'allowed-tools' lacks "
+                f"'Bash({first_token}:*)' — add the missing grant"
             )
 
         # --- destructive-tools-justification frontmatter key ---
@@ -1131,6 +1146,7 @@ def main():
     check_agents_skills_structure(agents_skills_dir, adapter_dir_names, errors)
     check_adapter_contract(agents_skills_dir, adapter_dir_names, errors)
     check_path_resolution_block(command_files, texts, errors)
+    check_no_bare_bash_grant(command_files, parsed_by_file, errors)
     check_allowed_tools_match_body(command_files, texts, parsed_by_file, errors)
 
     # .agents/skills/*/SKILL.md deliberately excluded: those adapters are

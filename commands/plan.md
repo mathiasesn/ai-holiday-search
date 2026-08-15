@@ -1,7 +1,7 @@
 ---
 description: Drafter-reviewer workflow that turns a destination or pasted listing into a verified, budgeted day-by-day Markdown itinerary
 argument-hint: "<destination and dates> | <paste a listing, package, or booking-page text>"
-allowed-tools: Read, Write, Bash, Glob, Task, Agent, WebSearch, WebFetch
+allowed-tools: Read, Write, Glob, Task, Agent, WebSearch, WebFetch
 ---
 
 # /plan — Drafter-reviewer itinerary workflow

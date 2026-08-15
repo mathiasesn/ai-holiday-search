@@ -1,7 +1,8 @@
 ---
 description: Save trips to a price watchlist and re-check them for price drops, rises, or sold-out status
 argument-hint: "add <trip> | remove <trip> | (no args: re-check all watched trips)"
-allowed-tools: Read, Write, Bash, Glob, WebSearch, WebFetch, mcp__claude-in-chrome__tabs_context_mcp, mcp__claude-in-chrome__tabs_create_mcp, mcp__claude-in-chrome__navigate, mcp__claude-in-chrome__get_page_text, mcp__claude-in-chrome__read_page, mcp__claude-in-chrome__find, mcp__claude-in-chrome__form_input, mcp__playwright__browser_tabs, mcp__playwright__browser_navigate, mcp__playwright__browser_fill_form, mcp__playwright__browser_type, mcp__playwright__browser_click, mcp__playwright__browser_select_option, mcp__playwright__browser_press_key, mcp__playwright__browser_find, mcp__playwright__browser_snapshot, mcp__playwright__browser_wait_for, mcp__playwright__browser_console_messages, mcp__playwright__browser_take_screenshot
+allowed-tools: Read, Write, Bash(uv:*), Bash(rm:*), Glob, WebSearch, WebFetch, mcp__claude-in-chrome__tabs_context_mcp, mcp__claude-in-chrome__tabs_create_mcp, mcp__claude-in-chrome__navigate, mcp__claude-in-chrome__get_page_text, mcp__claude-in-chrome__read_page, mcp__claude-in-chrome__find, mcp__claude-in-chrome__form_input, mcp__playwright__browser_tabs, mcp__playwright__browser_navigate, mcp__playwright__browser_fill_form, mcp__playwright__browser_type, mcp__playwright__browser_click, mcp__playwright__browser_select_option, mcp__playwright__browser_press_key, mcp__playwright__browser_find, mcp__playwright__browser_snapshot, mcp__playwright__browser_wait_for, mcp__playwright__browser_console_messages, mcp__playwright__browser_take_screenshot
+destructive-tools-justification: Bash(rm:*) — deletes exactly one resolved <DATA_ROOT>/watchlist/<slug>.json file on /watch remove, never a directory or glob
 ---
 
 # /watch — Price tracking
@@ -70,7 +71,7 @@ If this run needs profile data (e.g. resolving `<trip>` against profile-derived 
 
 ### `/watch remove <trip>`
 1. Resolve `<trip>` to a slug in `<DATA_ROOT>/watchlist/`. If no exact match, list close matches and ask the user to disambiguate.
-2. Delete `<DATA_ROOT>/watchlist/<slug>.json`.
+2. Delete exactly the one resolved `<DATA_ROOT>/watchlist/<slug>.json` file — nothing else is touched.
 3. Confirm removal.
 
 ### `/watch` (no arguments — re-check all)
