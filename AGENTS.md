@@ -1,16 +1,38 @@
 # AI Holiday Search — Framework Rules
 
 This file defines how Claude Code should behave in this repository. It contains **no
-personal travel data** — your actual traveler profile lives in the gitignored `profile/`
-folder, written by `/setup`. This file is tracked in git and shared by everyone who forks
-this template.
+personal travel data** — your actual traveler profile lives in `profile/` under the
+resolved data root (see below), written by `/setup`. This file is tracked in git and
+shared by everyone who forks this template.
 
 Read `ARCHI.md` before making changes — it is the architecture source of truth (structure,
 stack, conventions). This file remains the authority on behavior.
 
+**This file is only loaded in clone mode.** `AGENTS.md`/`CLAUDE.md` is read by Claude Code
+from a project checkout; an installed plugin does not load it. The path-resolution rule
+below is therefore also carried redundantly inside each command file
+(`commands/setup.md`, `scrape.md`, `plan.md`, `watch.md`, `reset.md`), so plugin-mode
+sessions still resolve the right roots even though they never see this file.
+
+## Path resolution: two distribution modes
+
+The framework is distributed two ways — an installed Claude Code plugin, or a fork/clone
+— and every command resolves two roots before touching a file:
+
+- **`FRAMEWORK_ROOT`** — where the tracked command/skill Markdown lives.
+- **`DATA_ROOT`** — where the traveler's personal profile and generated state live.
+
+In clone mode, `${CLAUDE_PLUGIN_ROOT}` is unset, and both roots are the repo root (today's
+behavior). In plugin mode, `${CLAUDE_PLUGIN_ROOT}` is set: `FRAMEWORK_ROOT` is
+`${CLAUDE_PLUGIN_ROOT}` and `DATA_ROOT` is `~/.ai-holiday-search` — one shared profile
+reused across every project, and nothing personal ever written into a project directory.
+`DATA_ROOT` holds `profile/`, `itineraries/`, `watchlist/`, `trip_scraper/`,
+`trip_tracker.csv`, and `documents/` (with `past-trips/` and `preferences/`).
+
 ## Before `/setup` has been run
 
-If `profile/` does not exist yet, treat this as a fresh checkout:
+If `profile/` does not exist yet under the resolved `DATA_ROOT`, treat this as a fresh
+setup:
 
 - Do not invent a traveler profile or assume preferences.
 - For any command that needs profile data (`/scrape`, `/plan`, `/watch`), tell the user to
@@ -18,8 +40,9 @@ If `profile/` does not exist yet, treat this as a fresh checkout:
 - You may still explain what each command does, read `README.md`/`SETUP.md`, or answer
   general questions about the framework.
 - As a fallback for *reading* what fields a profile needs, consult the `<!-- FILL IN -->`
-  templates in `.claude/skills/holiday-planner/01-traveler-profile.md` through
-  `06-packing-and-prep.md` — but never treat their example content as a real user's data.
+  templates in `skills/holiday-planner/01-traveler-profile.md` through
+  `06-packing-and-prep.md` (under `FRAMEWORK_ROOT`) — but never treat their example content
+  as a real user's data.
 
 ## The five commands
 
@@ -66,21 +89,25 @@ not get a lesser or ad hoc treatment.
 
 ## Local vs. tracked data — read this before touching profile data
 
-- **`profile/`** (gitignored) is the authoritative traveler profile once `/setup` has been
-  run. Always prefer it over anything else when it exists.
-- **`.claude/skills/holiday-planner/01-*.md` through `06-*.md`** (tracked) contain generic
-  templates with `<!-- FILL IN -->` markers. They document the *shape* of the profile
-  fields for anyone reading the repo — they are not a substitute for a real profile. If
-  `profile/` is absent, tell the user to run `/setup`; do not silently plan against the
-  template placeholders.
-- **`documents/`** (gitignored except `README.md` and the `.gitkeep` placeholders) holds
-  raw source material `/setup` reads from — not itself a profile format.
-- **`itineraries/`, `watchlist/`, `trip_scraper/`, `trip_tracker.csv`** (all gitignored)
-  are generated/working state, never framework content.
+- **`profile/`** (under `DATA_ROOT`; gitignored in clone mode, outside the repo entirely
+  in plugin mode) is the authoritative traveler profile once `/setup` has been run. Always
+  prefer it over anything else when it exists.
+- **`skills/holiday-planner/01-*.md` through `06-*.md`** (under `FRAMEWORK_ROOT`; tracked)
+  contain generic templates with `<!-- FILL IN -->` markers. They document the *shape* of
+  the profile fields for anyone reading the repo — they are not a substitute for a real
+  profile. If `profile/` is absent, tell the user to run `/setup`; do not silently plan
+  against the template placeholders.
+- **`documents/`** (under `DATA_ROOT`; gitignored except `README.md` and the `.gitkeep`
+  placeholders in clone mode) holds raw source material `/setup` reads from — not itself a
+  profile format.
+- **`itineraries/`, `watchlist/`, `trip_scraper/`, `trip_tracker.csv`** (all under
+  `DATA_ROOT`) are generated/working state, never framework content.
 
 ## Hard rule: never commit personal data
 
-Never stage or commit anything under `profile/`, `documents/past-trips/`,
+This applies to clone mode, where these paths sit inside the repo checkout (in plugin
+mode they live under `~/.ai-holiday-search` and are outside any repo entirely). Never
+stage or commit anything under `profile/`, `documents/past-trips/`,
 `documents/preferences/`, `itineraries/`, `watchlist/`, `trip_scraper/`,
 `trip_tracker.csv`, `.env`, or any API key/secret. If asked to commit changes, check
 `git status` first and flag anything that looks like personal data or a secret before

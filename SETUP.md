@@ -1,6 +1,18 @@
 # Setup guide
 
-This guide covers getting a fresh fork of **ai-holiday-search** running end to end.
+This guide covers getting **ai-holiday-search** running end to end, via either
+distribution route: an installed Claude Code plugin, or a fresh fork/clone.
+
+## Which route should I use?
+
+| | Plugin install | Fork/clone |
+| --- | --- | --- |
+| When to use it | You just want to use the framework | You want to modify commands, skills, or add a search source |
+| Where your data lives | `~/.ai-holiday-search/` (one profile, shared across every project) | Inside the repo checkout (gitignored) |
+| Setup effort | Two `/plugin` commands once the GitHub route works; today, one local-path `/plugin` fallback (see step 1) | `gh repo fork` + `git clone` |
+| Works from a downloaded ZIP or a Windows checkout without symlink support | Yes | No — see the note in step 1 |
+
+Both routes run the identical five commands and the same two Playwright MCP servers.
 
 ## Prerequisites
 
@@ -31,7 +43,61 @@ This guide covers getting a fresh fork of **ai-holiday-search** running end to e
 Nothing else is required. Everything degrades gracefully to web search + paste-a-listing
 if you skip the optional API keys and the extension.
 
-## 1. Fork and clone
+## 1. Install: plugin, or fork and clone
+
+### Option A — Plugin install (recommended)
+
+Inside Claude Code:
+
+```
+/plugin marketplace add mathiasesn/ai-holiday-search
+/plugin install ai-holiday-search
+```
+
+This needs `.claude-plugin/` present on the repo's default branch — as of this writing it
+only exists on an unmerged branch, so the command above currently fails with `Error:
+Marketplace file not found at .../.claude-plugin/marketplace.json`. Until it's merged, you
+can install from a local checkout instead:
+
+```
+/plugin marketplace add /path/to/ai-holiday-search
+/plugin install ai-holiday-search@ai-holiday-search
+```
+
+This fallback is a *directory-source* install — see the warning below for what that means
+before you use it.
+
+The repo is its own marketplace (`.claude-plugin/marketplace.json`), so this needs no
+separate registry. Once installed, the plugin's top-level `commands/`, `skills/`, and
+root `.mcp.json` are auto-discovered — the same five slash commands and the same two
+Playwright MCP servers as clone mode, with nothing to configure. Skip to step 3 (dependency
+install is only needed for clone mode, since the plugin's Python adapters run via `uv run`
+against their own PEP 723 headers regardless).
+
+Installed commands register namespaced — `/ai-holiday-search:setup`,
+`/ai-holiday-search:scrape`, and so on — not the bare `/setup` shown elsewhere in this
+guide. On the Claude Code version this was tested on, typing the bare form still resolved
+correctly via fuzzy matching, but that's an observed convenience, not the command's real
+name in plugin mode; the namespaced form is what's actually registered. (In clone mode the
+bare form is the real name.)
+
+**Directory-source installs copy your whole working tree, gitignored files included.**
+Adding a marketplace from a local path (as above) is a "directory source": Claude Code
+makes a real copy of the checkout — not a symlink — at
+`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`, and that copy includes
+whatever gitignored personal state exists in the checkout at install time: `profile/`,
+`watchlist/`, `trip_scraper/`, `documents/`, `itineraries/`, `trip_tracker.csv`,
+`.claude/settings.local.json`, and `.playwright-mcp/` (which, per `ARCHI.md` §9, can
+contain the runner's public IP). This only affects local-path (directory-source) installs
+— a GitHub-source install should carry only tracked files and be unaffected, but that
+route was not exercised (it currently fails, per above), so this is an inference, not a
+confirmed result. If you installed from a local path, remove the cached copy with
+`rm -rf ~/.claude/plugins/cache/<marketplace>` — note this also removes the working
+installed plugin itself, not just the leaked personal data, so you'll need to reinstall
+afterward. Tracked as
+[issue #22](https://github.com/mathiasesn/ai-holiday-search/issues/22).
+
+### Option B — Fork and clone
 
 ```bash
 gh repo fork <you>/ai-holiday-search --clone
@@ -40,7 +106,18 @@ cd ai-holiday-search
 
 (Or fork via the GitHub UI and `git clone` the usual way.)
 
-## 2. Install dependencies
+Use this route if you want to modify the framework itself — edit commands, skills, or add
+a search source.
+
+**Windows / ZIP-download limitation.** Clone mode relies on `.claude/commands` and
+`.claude/skills` being tracked symlinks into the top-level `commands/`/`skills/`
+directories. Symlinks don't survive a Windows checkout unless symlink support is enabled
+(`git config core.symlinks true`, or Developer Mode) or GitHub's "Download ZIP" button —
+both flatten symlinks into broken files or plain text. If you hit this, either use the
+plugin install instead, or re-clone with `git config --global core.symlinks true` set
+*before* cloning (an already-broken checkout needs a fresh `git clone` to pick this up).
+
+## 2. Install dependencies (clone mode only)
 
 ```bash
 uv sync
@@ -80,8 +157,12 @@ claude
 Then inside Claude Code:
 
 ```
-/setup
+/ai-holiday-search:setup
 ```
+
+(Plugin installs register commands namespaced like this; see step 1. In clone mode, or if
+fuzzy matching resolves it for you, the bare `/setup` shown throughout the rest of this
+guide works too.)
 
 `/setup` auto-detects what you have and offers three modes:
 
@@ -96,15 +177,22 @@ Then inside Claude Code:
 
 ### What lands where
 
+Every command resolves two roots before touching a file: `FRAMEWORK_ROOT` (where the
+tracked command/skill Markdown lives) and `DATA_ROOT` (where your personal profile and
+generated state live). In clone mode both are the repo root; in plugin mode
+`FRAMEWORK_ROOT` is the plugin's installed location and `DATA_ROOT` is
+`~/.ai-holiday-search`. The table below shows clone-mode paths; in plugin mode, read every
+`DATA_ROOT`-rooted row as `~/.ai-holiday-search/<same path>` instead.
+
 | Location | Tracked in git? | Contents |
 | --- | --- | --- |
-| `profile/` | No (gitignored) | Your filled-in traveler profile — the authoritative source `/scrape` and `/plan` read from. |
-| `documents/past-trips/`, `documents/preferences/` | No (gitignored, except the folder README) | Raw source material you supply for `/setup` to read. |
-| `.claude/skills/holiday-planner/01-06*.md` | Yes | Generic templates with `<!-- FILL IN -->` markers, describing the shape of profile fields. Not your real data. |
-| `itineraries/` | No (gitignored) | Output of `/plan`, one folder per trip. |
-| `watchlist/` | No (gitignored) | State written by `/watch` — trip snapshots and price history. |
-| `trip_scraper/` | No (gitignored) | Scraper state — seen trips, dedup cache. |
-| `trip_tracker.csv` | No (gitignored) | Your personal shortlist spreadsheet, created from `trip_tracker.csv.example`. |
+| `profile/` (`DATA_ROOT`) | No (gitignored in clone mode; outside the repo entirely in plugin mode) | Your filled-in traveler profile — the authoritative source `/scrape` and `/plan` read from. |
+| `documents/past-trips/`, `documents/preferences/` (`DATA_ROOT`) | No (gitignored, except the folder README) | Raw source material you supply for `/setup` to read. In plugin mode, drop files in `~/.ai-holiday-search/documents/past-trips/` and `.../preferences/`. |
+| `skills/holiday-planner/01-06*.md` (`FRAMEWORK_ROOT`) | Yes | Generic templates with `<!-- FILL IN -->` markers, describing the shape of profile fields. Not your real data. |
+| `itineraries/` (`DATA_ROOT`) | No (gitignored) | Output of `/plan`, one folder per trip. |
+| `watchlist/` (`DATA_ROOT`) | No (gitignored) | State written by `/watch` — trip snapshots and price history. |
+| `trip_scraper/` (`DATA_ROOT`) | No (gitignored) | Scraper state — seen trips, dedup cache. |
+| `trip_tracker.csv` (`DATA_ROOT`) | No (gitignored) | Your personal shortlist spreadsheet, created from `trip_tracker.csv.example`. |
 
 ## 5. Search and plan
 
@@ -136,7 +224,7 @@ operator or booking site):
 ### Browser-driven sources
 
 If a site has no usable API and blocks non-browser clients, the alternative is a
-Markdown-only skill under `.claude/skills/` with no `search.py` and no exit code —
+Markdown-only skill under `skills/` with no `search.py` and no exit code —
 `trivago-search`, `momondo-search`, and `booking-search` are the three worked examples. Such a skill defines its
 own fallback chain instead of the adapter exit-code protocol, and normalizes into the same
 result record. Verify any URL grammar against the live site rather than guessing it, record

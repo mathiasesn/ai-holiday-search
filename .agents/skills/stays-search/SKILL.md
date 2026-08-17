@@ -45,7 +45,7 @@ Flags: `--destination`, `--check-in` / `--check-out` (YYYY-MM-DD), `--guests`
 
 Each result has `source`, `title`, `url`, `price`, `currency`, `price_per_person`,
 `dates` (`{check_in, check_out}`), and free-form `details` (whatever extra fields the
-configured source returns). See `.claude/skills/trip-scraper/SKILL.md` ("Adapter
+configured source returns). See [../../../skills/trip-scraper/SKILL.md](../../../skills/trip-scraper/SKILL.md) ("Adapter
 result record") for the authoritative field-by-field definition, shared across all
 three `.agents/skills/*` adapters. `--json` with no matches prints `[]`.
 
@@ -58,7 +58,7 @@ machine-readable status and exits **2**:
 {"status": "no_credentials", "reason": "no_source_configured", "message": "...", "fallback": "web_search", "results": []}
 ```
 
-This is the adapter no-credentials protocol — see `.claude/skills/trip-scraper/SKILL.md` for the
+This is the adapter no-credentials protocol — see [../../../skills/trip-scraper/SKILL.md](../../../skills/trip-scraper/SKILL.md) for the
 authoritative shape shared by all three adapters. Callers (e.g. `/scrape`) should treat exit code
 `2` as "use Claude web search for
 stays in this destination instead of failing the run," and use the paste-a-listing

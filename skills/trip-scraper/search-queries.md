@@ -1,7 +1,7 @@
 # Search Queries — Default Settings for /scrape
 
 > This is a generic tracked template. `/setup` writes your filled-in personal copy to
-> `profile/search-queries.md` (gitignored). If that file exists, **it wins** — read it
+> `<DATA_ROOT>/profile/search-queries.md`. If that file exists, **it wins** — read it
 > instead of this one. Values below are illustrative European examples only, not defaults you
 > must keep.
 
@@ -50,4 +50,4 @@
 ---
 
 Referenced by the README's Customization table: "Default destinations, date windows, and
-sources for /scrape." Used by `trip-scraper/SKILL.md` to build adapter queries.
+sources for /scrape." Used by [SKILL.md](SKILL.md) to build adapter queries.

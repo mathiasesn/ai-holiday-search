@@ -1,7 +1,7 @@
 # 05 — Budget Rules
 
 > This is a generic tracked template; defaults below apply until `/setup` writes a filled
-> `profile/05-budget-rules.md` copy. If a filled copy exists in `profile/`, it wins.
+> `<DATA_ROOT>/profile/05-budget-rules.md` copy. If a filled copy exists in `<DATA_ROOT>/profile/`, it wins.
 
 ## Cost categories
 

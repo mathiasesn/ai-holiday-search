@@ -4,14 +4,6 @@ on:
   push:
   pull_request:
 
-# The adapters' no-credentials path is only exercised if none of these are set.
-# Kept in one place so a new adapter credential is added once, not per job.
-env:
-  ADAPTER_CRED_VARS: >-
-    AMADEUS_API_KEY AMADEUS_API_SECRET
-    STAYS_API_URL STAYS_API_KEY
-    PACKAGES_API_URL PACKAGES_API_KEY
-
 jobs:
   lint-and-guards:
     runs-on: ubuntu-latest
@@ -33,6 +25,20 @@ jobs:
       - name: Run security guards
         run: uv run python tools/security_guards.py
 
+      # Re-run both linters against a real `git clone` rather than the working
+      # tree actions/checkout produced. That round trip is the only place the
+      # assertions that depend on what git actually records — symlink text and
+      # dangling-ness, tracked-file and .gitignore coverage — are tested
+      # against a checkout a user would get.
+      - name: Clone the checkout and re-run both linters inside it
+        run: |
+          set -e
+          git clone "$PWD" /tmp/clone-test
+          cd /tmp/clone-test
+          uv sync
+          uv run python tools/lint_skills.py
+          uv run python tools/security_guards.py
+
   adapter-smoke:
     runs-on: ubuntu-latest
     strategy:
@@ -46,6 +52,14 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+
+      # tools/_repo.py's ADAPTER_CRED_VARS is the single source of truth for
+      # this list — derive it here instead of hardcoding it a second time,
+      # so a new adapter credential is added once, not per job/file.
+      - name: Load adapter credential var list
+        run: |
+          vars="$(cd tools && uv run python -c "from _repo import ADAPTER_CRED_VARS; print(' '.join(ADAPTER_CRED_VARS))")"
+          echo "ADAPTER_CRED_VARS=$vars" >> "$GITHUB_ENV"
 
       # `uv run --python X` downloads X on demand and exits non-zero if it
       # cannot honor the request, so it needs no separate install step and
@@ -69,6 +83,11 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+
+      - name: Load adapter credential var list
+        run: |
+          vars="$(cd tools && uv run python -c "from _repo import ADAPTER_CRED_VARS; print(' '.join(ADAPTER_CRED_VARS))")"
+          echo "ADAPTER_CRED_VARS=$vars" >> "$GITHUB_ENV"
 
       # Every adapter must survive the documented copy-a-folder fork workflow,
       # so copy each one out of the checkout in turn — a broken PEP 723 header

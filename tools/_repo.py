@@ -10,6 +10,52 @@ tracked", and "what does git consider ignored" instead of each re-deriving
 import os
 import subprocess
 
+# Personal-data path names shared by tools/security_guards.py and
+# tools/lint_skills.py, so the same five names aren't independently encoded
+# (as a list of representative sample paths vs. a regex alternation) in two
+# files that could silently drift apart.
+PERSONAL_DIRS = ("profile", "itineraries", "watchlist", "trip_scraper")
+PERSONAL_FILES = ("trip_tracker.csv",)
+
+# Framework-file path names, the <FRAMEWORK_ROOT> counterpart to the two
+# tuples above. A command file that names one of these is naming something it
+# reads at execution time, so the reference must be rooted. Registering a new
+# guarded framework file is a one-word edit here rather than a new regex.
+FRAMEWORK_DIRS = ("skills", "commands")
+FRAMEWORK_FILES = ("trip_tracker.csv.example",)
+
+# Shell verbs that may irreversibly destroy or move data. A `Bash(<verb>:*)`
+# grant for one of these is only permitted when the body backtick-invokes the
+# verb, or the command's frontmatter carries a `destructive-tools-justification`
+# entry naming and explaining it — an unused destructive grant is exactly the
+# over-permission `Bash(find:*)` regression this check exists to catch.
+DESTRUCTIVE_SHELL_VERBS = ("rm", "find", "mv", "dd", "truncate", "chmod")
+
+# Guarded verbs that cannot destroy data: a grant the body never uses is
+# harmless here, so only the body -> grant direction applies to these.
+SAFE_SHELL_VERBS = ("ls", "mkdir", "test", "cp", "cat", "sed", "git", "curl", "uv", "python")
+
+# Every verb whose backticked appearance in a commands/*.md body must be
+# matched by an `allowed-tools` grant (bare `Bash` or `Bash(<verb>:*)`), used
+# by tools/lint_skills.py's check_allowed_tools_match_body. Composed from the
+# two tuples above so DESTRUCTIVE_SHELL_VERBS is a subset by construction
+# rather than by comment — listing them separately let `dd`, `truncate`, and
+# `chmod` fall out of the guarded set while the comment still claimed they
+# were in it. Registering a new verb a command body legitimately shells out
+# to is a one-word edit to whichever tuple above it belongs in.
+GUARDED_SHELL_VERBS = DESTRUCTIVE_SHELL_VERBS + SAFE_SHELL_VERBS
+
+# Adapter credential env var names shared by tools/lint_skills.py,
+# tools/security_guards.py, and (via a derivation step) .github/workflows/ci.yml.
+ADAPTER_CRED_VARS = (
+    "AMADEUS_API_KEY",
+    "AMADEUS_API_SECRET",
+    "STAYS_API_KEY",
+    "STAYS_API_URL",
+    "PACKAGES_API_KEY",
+    "PACKAGES_API_URL",
+)
+
 
 def repo_root():
     """Return the absolute repo root.
@@ -42,6 +88,31 @@ def tracked_files(root=None):
     if result.returncode != 0:
         raise RuntimeError(f"git ls-files failed: {result.stderr}")
     return [line for line in result.stdout.splitlines() if line]
+
+
+def tracked_modes(paths=None, root=None):
+    """Return {path: git-index-mode} from `git ls-files -s [paths...]`.
+
+    Mode "120000" means a tracked symlink. Handles the tab-separated
+    `"<mode> <sha> <stage>\\t<path>"` output format once, shared by any
+    caller that needs to know how a path is tracked (e.g. verifying
+    `.claude/commands` / `.claude/skills` are tracked as symlinks).
+    """
+    root = root or repo_root()
+    cmd = ["git", "ls-files", "-s"]
+    if paths:
+        cmd += list(paths)
+    result = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"git ls-files -s failed: {result.stderr.strip()}")
+
+    modes = {}
+    for line in result.stdout.splitlines():
+        meta, _, path = line.partition("\t")
+        parts = meta.split()
+        if parts and path:
+            modes[path] = parts[0]
+    return modes
 
 
 def ignored_paths(paths, root=None, no_index=False):

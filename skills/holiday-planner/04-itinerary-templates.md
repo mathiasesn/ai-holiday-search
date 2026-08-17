@@ -2,8 +2,8 @@
 
 > Pacing rules here are enforced, not suggested. `/plan`'s verification step (README step 6)
 > rejects any draft itinerary that breaks them and sends it back for revision. Limits below
-> are sensible defaults; `/setup` may tighten or loosen them in your `profile/` copy based on
-> `02-travel-style.md`. If a filled copy exists in `profile/`, it wins.
+> are sensible defaults; `/setup` may tighten or loosen them in your `<DATA_ROOT>/profile/` copy based on
+> `02-travel-style.md`. If a filled copy exists in `<DATA_ROOT>/profile/`, it wins.
 
 ## Pacing rules (defaults — enforced by /plan)
 

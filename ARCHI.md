@@ -10,7 +10,7 @@
 
 This is the structural source of truth for `ai-holiday-search`: what exists, where it lives, how the pieces compose, and which conventions are enforced by tooling.
 
-**It is deliberately complementary to `CLAUDE.md`, not a replacement.** `CLAUDE.md` (tracked, repo root) is the authority on *behavioral* rules — how fit scoring must be presented, that pacing rules are hard constraints, that uncertainty must be flagged, that personal data must never be committed. This document does not restate those rules and must never contradict them. When the two appear to disagree, `CLAUDE.md` wins on behavior; this file wins on structure.
+**It is deliberately complementary to `AGENTS.md`, not a replacement.** `AGENTS.md` (tracked, repo root; `CLAUDE.md` is a tracked symlink to it, loaded in clone mode only — see §4a) is the authority on *behavioral* rules — how fit scoring must be presented, that pacing rules are hard constraints, that uncertainty must be flagged, that personal data must never be committed. This document does not restate those rules and must never contradict them. When the two appear to disagree, `AGENTS.md` wins on behavior; this file wins on structure.
 
 Read sections 2–4 to orient, 8–10 for the parts of this repo that cannot be guessed from the file tree (the adapter contract, the data boundary, and how the prompt layer composes), and section 12 for the non-negotiables.
 
@@ -20,11 +20,11 @@ Known gaps, deferred decisions, and engineering debt are tracked as [GitHub issu
 
 ## 2. Overview
 
-`ai-holiday-search` is a **Claude Code framework template**, not a conventional application. It is meant to be forked: a traveler runs `/setup` to write a local, gitignored profile, then uses `/scrape`, `/plan`, and `/watch` to find, plan, and price-track holidays. `/reset` wipes local state.
+`ai-holiday-search` is a **Claude Code framework template**, distributed two ways: as an installable Claude Code plugin (`/plugin marketplace add mathiasesn/ai-holiday-search` then `/plugin install ai-holiday-search`), or by forking/cloning the repo to modify the framework itself. In either mode, a traveler runs `/setup` to write a profile, then uses `/scrape`, `/plan`, and `/watch` to find, plan, and price-track holidays. `/reset` wipes local state. See §4a for how the two modes resolve file paths differently.
 
 Two layers make up the system, and the balance between them is the single most important thing to understand:
 
-1. **The prompt/agent layer is the product.** Most of the repo's substance is Markdown that Claude Code reads as instructions: 5 slash commands, 5 Claude skills, and 6 numbered holiday-planner reference documents. Workflow logic — fit scoring math, pacing enforcement, the drafter–reviewer pipeline, budget rules, JSON state-file schemas — lives in prose and tables in these files, not in Python.
+1. **The prompt/agent layer is the product.** Most of the repo's substance is Markdown that Claude Code reads as instructions: 5 slash commands, 6 Claude skills, and 6 numbered holiday-planner reference documents. Workflow logic — fit scoring math, pacing enforcement, the drafter–reviewer pipeline, budget rules, JSON state-file schemas — lives in prose and tables in these files, not in Python.
 2. **The Python layer is thin support.** ~1,100 lines total, split between three near-standalone search adapters (`.agents/skills/*/search.py`) that wrap external APIs, and two repo-hygiene scripts (`tools/lint_skills.py`, `tools/security_guards.py`) that CI runs on every push.
 
 Architecturally, the flow is: `/setup` fills `profile/` from tracked templates → `/scrape` fans out to adapters (or falls back to web search), normalizes and deduplicates results, and scores them → `/plan` runs a 7-step drafter–reviewer pipeline producing a verified Markdown itinerary → `/watch` snapshots trips and re-checks prices over time.
@@ -57,27 +57,35 @@ There is no test framework, no linter config, and no formatter config in this re
 
 ```
 ai-holiday-search/
-├── CLAUDE.md                       # Behavioral rules for Claude in this repo — authority on behavior
+├── AGENTS.md                       # Behavioral rules for Claude in this repo — authority on behavior
+├── CLAUDE.md -> AGENTS.md          # Tracked symlink (Claude Code reads this filename); clone mode only, see §4a
 ├── ARCHI.md                        # This file — architecture memory, authority on structure
-├── README.md                       # User-facing guide (fork → setup → scrape → plan → watch)
+├── README.md                       # User-facing guide (install/fork → setup → scrape → plan → watch)
 ├── SETUP.md                        # Detailed install/prereq guide
 ├── pyproject.toml                  # name/version, requires-python >=3.10, deps=[requests], package=false
 ├── uv.lock                         # Committed lock for the project env (NOT the adapters)
 ├── .python-version                 # 3.12 — dev pin uv provisions
 ├── .gitignore                      # Encodes the personal-data boundary (see §9)
-├── .mcp.json                       # Tracked MCP config: headless + headed Playwright servers (§7)
+├── .mcp.json                       # Tracked MCP config: headless + headed Playwright servers (§7); auto-discovered in BOTH modes, see §4a
 ├── trip_tracker.csv.example        # Header-only template; /setup copies it to gitignored trip_tracker.csv
 │
-├── .claude/                        # Claude Code layer (host-specific)
-│   ├── commands/                   # 5 slash commands, one .md each — the user-facing entry points
-│   │   ├── setup.md  scrape.md  plan.md  watch.md  reset.md
-│   ├── skills/                     # Reference knowledge the commands load
-│   │   ├── holiday-planner/        # SKILL.md + 01-…-06-*.md: profile shape, scoring, pacing, budget, packing
-│   │   ├── trip-scraper/           # SKILL.md (adapter protocol + state schemas) + search-queries.md
-│   │   ├── price-watch/            # SKILL.md: slug derivation, watchlist schema, re-check thresholds
-│   │   ├── trivago-search/         # SKILL.md: browser-driven stays source, no search.py, own fallback chain
-│   │   ├── momondo-search/         # SKILL.md: browser-driven flights/stays/packages source, no search.py, own fallback chain
-│   │   └── booking-search/         # SKILL.md: browser-driven stays/flights source, no search.py, own fallback chain
+├── .claude-plugin/
+│   ├── plugin.json                 # Plugin manifest: name, version 0.1.0, metadata
+│   └── marketplace.json            # Makes this repo its own marketplace; plugin entry source: "./"
+│
+├── commands/                       # 5 slash commands, one .md each — the user-facing entry points
+│   ├── setup.md  scrape.md  plan.md  watch.md  reset.md
+├── skills/                         # Reference knowledge the commands load
+│   ├── holiday-planner/            # SKILL.md + 01-…-06-*.md: profile shape, scoring, pacing, budget, packing
+│   ├── trip-scraper/                # SKILL.md (adapter protocol + state schemas) + search-queries.md
+│   ├── price-watch/                # SKILL.md: slug derivation, watchlist schema, re-check thresholds
+│   ├── trivago-search/             # SKILL.md: browser-driven stays source, no search.py, own fallback chain
+│   ├── momondo-search/             # SKILL.md: browser-driven flights/stays/packages source, no search.py, own fallback chain
+│   └── booking-search/             # SKILL.md: browser-driven stays/flights source, no search.py, own fallback chain
+│
+├── .claude/                        # Claude Code project layer (clone mode only — see §4a)
+│   ├── commands -> ../commands     # Tracked symlink; this is what makes clone mode need zero configuration
+│   ├── skills -> ../skills         # Tracked symlink; same reason
 │   └── settings.local.json         # Per-user permissions; untracked — see issue #4
 │
 ├── .agents/skills/                 # Agent-AGNOSTIC search adapters — designed to be copied out wholesale
@@ -92,15 +100,53 @@ ai-holiday-search/
 │
 ├── .github/workflows/ci.yml        # lint-and-guards | adapter-smoke (3.10,3.12) | standalone-adapter
 │
-├── documents/                      # INPUT for /setup — past-trips/ and preferences/ (contents gitignored)
-├── profile/                        # GENERATED by /setup — the real traveler profile (gitignored, absent in a fresh clone); includes tooling.md (§9)
-├── itineraries/                    # GENERATED by /plan — one folder per trip (gitignored)
-├── watchlist/                      # GENERATED by /watch — one JSON per watched trip (gitignored)
-├── trip_scraper/                   # GENERATED by /scrape — seen.json dedupe state (gitignored)
+├── documents/                      # INPUT for /setup — past-trips/ and preferences/ (contents gitignored). Clone mode only; plugin mode: ~/.ai-holiday-search/documents/ — see §4a
+├── .gitignore (plugin mode DATA_ROOT only) # `*` — written by /setup before any profile write, in case $HOME is itself a tracked dotfiles repo; see §9
+├── profile/                        # GENERATED by /setup — the real traveler profile (gitignored, absent in a fresh clone); includes tooling.md (§9). Clone mode only; plugin mode: ~/.ai-holiday-search/profile/
+├── itineraries/                    # GENERATED by /plan — one folder per trip (gitignored). Clone mode only; plugin mode: ~/.ai-holiday-search/itineraries/
+├── watchlist/                      # GENERATED by /watch — one JSON per watched trip (gitignored). Clone mode only; plugin mode: ~/.ai-holiday-search/watchlist/
+├── trip_scraper/                   # GENERATED by /scrape — seen.json dedupe state (gitignored). Clone mode only; plugin mode: ~/.ai-holiday-search/trip_scraper/
 └── specs/                          # Local working specs; specs/.gitignore contains `*` — deliberately untracked
 ```
 
-**Two skills directories, and the distinction matters.** `.claude/skills/` holds Claude-Code-specific planning knowledge that assumes the whole repo is present. `.agents/skills/` holds portable, agent-agnostic search adapters that must work when a single folder is copied elsewhere with nothing else — this constraint drives several design decisions in §8.
+**Two skills directories, and the distinction matters.** `skills/` holds Claude-Code-specific planning knowledge that assumes the whole repo (or an installed plugin's `${CLAUDE_PLUGIN_ROOT}`) is present. `.agents/skills/` holds portable, agent-agnostic search adapters that must work when a single folder is copied elsewhere with nothing else — this constraint drives several design decisions in §8.
+
+---
+
+## 4a. Dual-Mode Path Resolution
+
+Distribution happens two ways, and every command resolves two roots before touching a file:
+
+- **`FRAMEWORK_ROOT`** — where the tracked command/skill Markdown lives.
+- **`DATA_ROOT`** — where the traveler's personal profile and generated state (`profile/`, `itineraries/`, `watchlist/`, `trip_scraper/`, `trip_tracker.csv`, `documents/`) live.
+
+| | Clone mode | Plugin mode |
+|---|---|---|
+| Install | `gh repo fork ... --clone` / `git clone` | `/plugin marketplace add mathiasesn/ai-holiday-search` then `/plugin install ai-holiday-search` |
+| `${CLAUDE_PLUGIN_ROOT}` | Unset | Set, to the installed plugin's directory |
+| `FRAMEWORK_ROOT` | Repo root | `${CLAUDE_PLUGIN_ROOT}` |
+| `DATA_ROOT` | Repo root (today's behavior) | `~/.ai-holiday-search` |
+| `AGENTS.md`/`CLAUDE.md` loaded? | Yes | No — this rule is additionally carried inside each command file so plugin sessions still resolve correctly |
+
+**Plugin facts, tagged by how each was established.** The end-to-end `/plugin install` of this repo was performed on branch `plugin-distribution` at commit `74ddc64` (2026-08-06), and `/setup` was then run under it from an unrelated project directory (2026-08-07). Each bullet below is marked **[exercised]** (directly observed) or **[inferred]** (from the Claude Code plugins reference and/or a local symlink-discovery experiment, not exercised).
+
+**Both installs so far were directory-source, and that limits what they prove — see the directory-source bullet below before trusting any "[exercised]" tag here.**
+
+- **[exercised]** `${CLAUDE_PLUGIN_ROOT}` is interpolated in command and skill Markdown, and is only set when running as an installed plugin — its absence is the clone-mode signal. Confirmed by a plugin-mode `/setup` run from an unrelated project directory, which resolved `FRAMEWORK_ROOT` from the variable (not from the fail-loudly marker search, which could not have reached that path from that working directory).
+- **[exercised: top-level `commands/`/`skills/` discovery; inferred: `agents/`/`.mcp.json` auto-discovery]** An installed plugin's default discovery covers top-level `commands/`, `skills/`, `agents/`, and a root `.mcp.json` automatically — no separate plugin-mode MCP declaration exists or is needed; the same `.mcp.json` (two Playwright servers, §7) serves both modes. The install confirmed commands and skills were discovered; MCP server auto-discovery/reachability was not exercised (see "Still unverified" below).
+- **[inferred]** Claude Code follows the `.claude/commands` and `.claude/skills` symlinks in a clone checkout, which is the entire mechanism that keeps clone mode zero-configuration after the framework content moved to top-level `commands/`/`skills/`.
+- **[inferred]** `${CLAUDE_PLUGIN_DATA}` (resolves to `~/.claude/plugins/data/<plugin-id>/`) exists as a plugin-managed alternative storage location, but was deliberately **not** used for `DATA_ROOT`. `~/.ai-holiday-search` was chosen instead for user discoverability (a plain, predictable home-directory path a traveler can find, back up, or inspect without knowing Claude Code's internal plugin-data layout) and for cross-project reuse (the same profile applies regardless of which project directory the plugin happens to be invoked from).
+- **[exercised]** Commands register namespaced, as `/ai-holiday-search:setup` etc., not bare `/setup`; fuzzy matching resolves the bare form. Observed on one Claude Code version on one machine.
+- **[inferred]** All three PEP 723 adapters, and both markers the commands' fail-loudly fallback keys on (`ARCHI.md`, `.agents/skills/`), ship with the plugin, so no structural rewrite is needed for plugin mode. What was *observed* is weaker than it looks: they exist at `.agents/skills/{flights,stays,packages}-search/search.py` in the cache copy — but a directory-source install does not execute the cache copy (next bullet), so this verified a tree the session never reads. That they ship in a **GitHub-source** install remains inferred.
+- **[exercised]** All six skill directories ship in the installed tree, and the five commands plus the skills seen in the listing each registered exactly once — the tracked `.claude/commands`/`.claude/skills` symlinks are present there and do not cause duplicate registration. The listing was spot-checked, so "no duplicates" is confirmed for the commands and the skills observed, not exhaustively for all six.
+- **[exercised]** **A directory-source install runs from the source directory, not the cache copy — so it does not test the shipped artifact.** `known_marketplaces.json` records both `{"source": "directory", "path": …}` and `installLocation` pointing at the *source checkout*, and `${CLAUDE_PLUGIN_ROOT}` resolves to that path. Note `installed_plugins.json` separately records an `installPath` under the cache — **the two disagree, and `installLocation` is the one that governs.** Consequences: in a local dev install `FRAMEWORK_ROOT` is your clone, so uncommitted edits are live and the packaged tree is bypassed; "tested in plugin mode" this way proves the working tree runs, not that the plugin ships correctly. It also means such a session can see the clone's own `profile/` — `DATA_ROOT` is still `~/.ai-holiday-search` and unaffected, but the two modes' framework roots coincide exactly as they do in clone mode.
+- **[exercised]** That same directory-source install *also* copies the entire working tree — a real copy, distinct inode, not a symlink — to `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`, gitignored files included (the personal paths §9 lists, e.g. `profile/`, `trip_tracker.csv`). The copy is dead weight for execution but live for privacy: it persists on disk regardless. A GitHub-source install should carry only tracked files and thus be unaffected, but this was not exercised — that route currently fails (`.claude-plugin/` is not on the default branch; see `SETUP.md` step 1), so that claim is an inference. Filed as [issue #22](https://github.com/mathiasesn/ai-holiday-search/issues/22); see also §9.
+
+**Verified by the plugin-mode `/setup` run (2026-08-07), from a git project unrelated to this repo:** `DATA_ROOT` resolved to `~/.ai-holiday-search`; `<DATA_ROOT>/.gitignore` was created containing `*` **before** any profile file was written (the ordering `check_setup_gitignore_step` can only pin in prose — §11); all seven profile files plus `trip_tracker.csv` landed under `DATA_ROOT`; and **nothing personal was written into the project directory**.
+
+**Still unverified:** a GitHub-source `/plugin install` of this repo — the route currently fails (`.claude-plugin/` is not on the default branch), and it is the only way to learn whether a real user's `FRAMEWORK_ROOT` roots at the cache copy rather than a source checkout, which every other open question here depends on; MCP server reachability under `/scrape` in plugin mode; cross-project profile reuse observed from a second project (the fixed absolute `DATA_ROOT` makes it structurally near-certain, but it has not been watched happen); and the `<DATA_ROOT>/.gitignore` guard actually saving a traveler whose `$HOME` *is* a tracked dotfiles repo — the test machine's `$HOME` is not one, so the step was seen to run, not seen to protect.
+
+**Known limitation: Windows checkouts and ZIP downloads.** The `.claude/commands` and `.claude/skills` symlinks do not survive a Windows checkout without symlink support enabled (`git config core.symlinks true` or Developer Mode), nor GitHub's "Download ZIP" button — both flatten a symlink into a broken file or plain text, breaking clone mode. Affected users should either use the plugin install, or enable symlink support and re-clone (an already-broken checkout needs a fresh clone to pick up the config change).
 
 ---
 
@@ -108,12 +154,12 @@ ai-holiday-search/
 
 These are the principles actually governing this codebase, inferred from the code and confirmed by its comments and the issue tracker:
 
-1. **Logic lives in Markdown; Python is I/O only.** Scoring, pacing, budgeting, and pipeline sequencing are specified in `.claude/skills/**`. Do not port that logic into Python — the agent is the interpreter. Python exists only where a deterministic external call or a hygiene check is needed.
+1. **Logic lives in Markdown; Python is I/O only.** Scoring, pacing, budgeting, and pipeline sequencing are specified in `skills/**`. Do not port that logic into Python — the agent is the interpreter. Python exists only where a deterministic external call or a hygiene check is needed.
 2. **Graceful degradation is mandatory, never optional.** Every source has a fallback chain, whatever its kind: adapter (exit 2) or browser read (unreachable, permission denied, bot challenge) → Claude web search → user pastes text. The paste path is a first-class input that enters the same evaluate → draft → review → verify pipeline, per `CLAUDE.md`. No source may fail a `/scrape` run.
 3. **Adapters are self-contained, and duplication is the accepted price.** The copy-a-folder fork workflow means `.agents/skills/*/search.py` cannot import a shared module. ~330 near-identical lines across the three adapters is a **deliberate, rejected-refactor** decision ([issue #17](https://github.com/mathiasesn/ai-holiday-search/issues/17), closed as not planned), guarded by a CI drift check instead of deduplicated.
 4. **Personal data never enters git.** Enforced structurally by `.gitignore` and mechanically by `tools/security_guards.py`, not by convention alone. See §9.
-5. **Tracked templates are the *shape*, never the data.** `.claude/skills/holiday-planner/0X-*.md` carry `<!-- FILL IN -->` markers and generic defaults. A filled `profile/0X-*.md` copy always wins when present; if `profile/` is absent, commands must stop and say "run `/setup`" rather than plan against placeholder examples.
-6. **One authority per schema.** Each shared data shape is defined in exactly one file, and everything else points back to it. `.claude/skills/trip-scraper/SKILL.md` is authoritative for the adapter result record, the no-credentials protocol, the normalized candidate record, and `seen.json`. `.claude/skills/price-watch/SKILL.md` is authoritative for the watchlist schema. Adapter `SKILL.md`s and Python docstrings only summarize and link back.
+5. **Tracked templates are the *shape*, never the data.** `skills/holiday-planner/0X-*.md` carry `<!-- FILL IN -->` markers and generic defaults. A filled `profile/0X-*.md` copy always wins when present; if `profile/` is absent, commands must stop and say "run `/setup`" rather than plan against placeholder examples.
+6. **One authority per schema.** Each shared data shape is defined in exactly one file, and everything else points back to it. `skills/trip-scraper/SKILL.md` is authoritative for the adapter result record, the no-credentials protocol, the normalized candidate record, and `seen.json`. `skills/price-watch/SKILL.md` is authoritative for the watchlist schema. Adapter `SKILL.md`s and Python docstrings only summarize and link back.
 7. **Guards must fail loudly, never silently pass.** Both `tools/` scripts treat "could not determine the answer" (e.g. a git failure) as a hard error. This is scar tissue: two guards previously passed unconditionally while checking nothing (documented in [issue #1](https://github.com/mathiasesn/ai-holiday-search/issues/1)).
 
 ---
@@ -156,7 +202,7 @@ No tests exist. [Issue #1](https://github.com/mathiasesn/ai-holiday-search/issue
 
 Adapter configuration is environment variables; there is no adapter-specific config file. Every variable is **optional** — unset means the adapter takes its documented fallback path. The one exception is MCP server configuration: tracked `.mcp.json` at the repo root declares two Playwright MCP servers — see §3.
 
-**`playwright`** (`npx -y @playwright/mcp@0.0.78 --headless --isolated --user-agent "…Chrome/149.0.0.0…"`) is the one the `/watch` browser path (and the `/scrape` Playwright opt-in) depend on. `--headless`: a scheduled/cron run has no display, so a headed browser cannot start there. `--isolated`: a fresh profile per run, no persisted cookies or login state — this is what neutralizes the browser-driven skills' prefilled-previous-search privacy hazard (trivago/momondo/booking all arrive prefilled from account history when a real, logged-in session is used instead). Trade-off: consent/cookie walls appear on every run, which is why the browser-driven skills define an unattended terminal outcome. `--user-agent`: overrides headless Chrome's default UA, which trivago rejects — rationale and per-source scope in `.claude/skills/trivago-search/SKILL.md` ("Why these Playwright flags"), evidence in [issue #8](https://github.com/mathiasesn/ai-holiday-search/issues/8).
+**`playwright`** (`npx -y @playwright/mcp@0.0.78 --headless --isolated --user-agent "…Chrome/149.0.0.0…"`) is the one the `/watch` browser path (and the `/scrape` Playwright opt-in) depend on. `--headless`: a scheduled/cron run has no display, so a headed browser cannot start there. `--isolated`: a fresh profile per run, no persisted cookies or login state — this is what neutralizes the browser-driven skills' prefilled-previous-search privacy hazard (trivago/momondo/booking all arrive prefilled from account history when a real, logged-in session is used instead). Trade-off: consent/cookie walls appear on every run, which is why the browser-driven skills define an unattended terminal outcome. `--user-agent`: overrides headless Chrome's default UA, which trivago rejects — rationale and per-source scope in `skills/trivago-search/SKILL.md` ("Why these Playwright flags"), evidence in [issue #8](https://github.com/mathiasesn/ai-holiday-search/issues/8).
 
 **`playwright-headed`** (`npx -y @playwright/mcp@0.0.78 --isolated`, no `--headless`) is a second, tracked server for attended debugging with a visible browser window — registered out of the box so `/scrape`'s Playwright opt-in can be run headed without any manual `claude mcp add`. It keeps `--isolated` for the same privacy reason as above, and deliberately carries **no** `--user-agent`: a headed browser advertises no `Headless` token, so there is nothing to override. Point the driver at it for a debugging session, then go back to `playwright` for normal use.
 
@@ -169,7 +215,7 @@ Adapter configuration is environment variables; there is no adapter-specific con
 
 Secrets go in `.env` (gitignored) or the shell environment. **Adapters must never print, log, or include credentials in error output** — `flights-search` catches broadly and prints only `exc.__class__.__name__` for exactly this reason. `tools/security_guards.py` allowlists these variable *names* appearing in docs but flags any real-looking *value* attached to them.
 
-Planning defaults (destinations, date windows, price ceilings) are configuration too, but they live in Markdown: `.claude/skills/trip-scraper/search-queries.md` is the tracked generic template, overridden by `profile/search-queries.md` when `/setup` has written one.
+Planning defaults (destinations, date windows, price ceilings) are configuration too, but they live in Markdown: `skills/trip-scraper/search-queries.md` is the tracked generic template, overridden by `profile/search-queries.md` when `/setup` has written one.
 
 ---
 
@@ -213,19 +259,19 @@ On exit 2 with `--json`, the adapter prints **exactly one JSON object**:
 
 ### Result record
 
-`--json` on the success path prints a JSON **array** of records; `[]` when there are no matches. Authoritative definition in `.claude/skills/trip-scraper/SKILL.md`:
+`--json` on the success path prints a JSON **array** of records; `[]` when there are no matches. Authoritative definition in `skills/trip-scraper/SKILL.md`:
 
 `source` (str, adapter name) · `title` (str) · `url` (str|null) · `price` (float, total) · `currency` (str, ISO) · `price_per_person` (float) · `dates` (dict: `{depart, return}` for flights/packages, `{check_in, check_out}` for stays) · `details` (dict, free-form source-specific).
 
 This is **distinct from** the "normalized candidate record" that `trip-scraper` builds by merging adapter records with destination/trip context before scoring.
 
-**Carve-out: a source may instead be browser-driven** (lives in `.claude/skills/`, Markdown-only, no `search.py`/exit code, its own fallback chain) — the exit-code protocol above remains load-bearing and unchanged for CLI adapters; this only exempts browser-driven sources from it. Such a source may cover one vertical or several, in which case which verticals run is query-driven per the "Vertical selection" rule in `.claude/skills/trip-scraper/SKILL.md`; the current instances are listed in the directory tree above.
+**Carve-out: a source may instead be browser-driven** (lives in `skills/`, Markdown-only, no `search.py`/exit code, its own fallback chain) — the exit-code protocol above remains load-bearing and unchanged for CLI adapters; this only exempts browser-driven sources from it. Such a source may cover one vertical or several, in which case which verticals run is query-driven per the "Vertical selection" rule in `skills/trip-scraper/SKILL.md`; the current instances are listed in the directory tree above.
 
 ### Adding a new source
 
 **CLI adapter:** copy an existing adapter folder, rename it, update `SKILL.md` frontmatter `name` to match the new directory, point `search.py` at your API, keep the exit-code protocol and result-record shape exactly, add any new credential env vars to `ADAPTER_CRED_VARS` in the CI workflow and to `ALLOWED_ENV_VAR_NAMES` in `tools/security_guards.py`, and `chmod +x search.py`. Do not introduce a shared import.
 
-**Browser-driven source:** add a Markdown-only skill under `.claude/skills/` — no `search.py`, no exit code. Define its own fallback chain, normalize results into the same result record as CLI adapters, and register it in both `search-queries.md`'s source table and `trip-scraper`'s fan-out step. If it covers more than one vertical, register it in each vertical's fan-out list and follow the "Vertical selection" rule rather than restating it. Verify any URL grammar against the live site, record the date, and mark unverified tokens as such — [issue #9](https://github.com/mathiasesn/ai-holiday-search/issues/9) explains why this date is the only freshness signal available.
+**Browser-driven source:** add a Markdown-only skill under `skills/` — no `search.py`, no exit code. Define its own fallback chain, normalize results into the same result record as CLI adapters, and register it in both `search-queries.md`'s source table and `trip-scraper`'s fan-out step. If it covers more than one vertical, register it in each vertical's fan-out list and follow the "Vertical selection" rule rather than restating it. Verify any URL grammar against the live site, record the date, and mark unverified tokens as such — [issue #9](https://github.com/mathiasesn/ai-holiday-search/issues/9) explains why this date is the only freshness signal available.
 
 ---
 
@@ -233,9 +279,9 @@ This is **distinct from** the "normalized candidate record" that `trip-scraper` 
 
 The repo is split into **tracked framework content** and **untracked personal data**, and this split is enforced by tooling, not trust.
 
-**Tracked (safe to commit):** `CLAUDE.md`, `ARCHI.md`, `README.md`, `SETUP.md`, everything under `.claude/commands/`, `.claude/skills/`, `.agents/skills/`, `tools/`, `.github/`, `pyproject.toml`, `uv.lock`, `.mcp.json`, `trip_tracker.csv.example`, and the `.gitkeep` / `documents/README.md` scaffolding placeholders.
+**Tracked (safe to commit):** `AGENTS.md`, `CLAUDE.md` (symlink to `AGENTS.md`), `ARCHI.md`, `README.md`, `SETUP.md`, everything under `commands/`, `skills/`, `.agents/skills/`, `tools/`, `.github/`, `.claude-plugin/`, `pyproject.toml`, `uv.lock`, `.mcp.json`, `trip_tracker.csv.example`, the `.claude/commands` and `.claude/skills` symlinks themselves, and the `.gitkeep` / `documents/README.md` scaffolding placeholders.
 
-**Gitignored (never commit):** `profile/`, `itineraries/*`, `watchlist/*`, `trip_scraper/*`, `trip_tracker.csv`, the contents of `documents/past-trips/` and `documents/preferences/`, `.env`, `*.key`, `.playwright-mcp/` (Playwright MCP's console logs and page snapshots of real searches, which include the runner's public IP), and `specs/` (via its own `.gitignore` containing `*`).
+**Gitignored (never commit):** `profile/`, `itineraries/*`, `watchlist/*`, `trip_scraper/*`, `trip_tracker.csv`, the contents of `documents/past-trips/` and `documents/preferences/`, `.env`, `*.key`, `.playwright-mcp/` (Playwright MCP's console logs and page snapshots of real searches, which include the runner's public IP), and `specs/` (via its own `.gitignore` containing `*`). Gitignoring is not the whole boundary: it does not protect against a directory-source plugin install, which copies these paths regardless — see §4a. In plugin mode, `/setup` additionally writes `<DATA_ROOT>/.gitignore` (containing `*`) before any profile write, since `$HOME` may itself be a tracked dotfiles repo where nothing under `~/.ai-holiday-search` would otherwise be ignored; `/reset all` preserves this file rather than deleting it.
 
 **`profile/tooling.md`** — the browser-driver preference, written by `/setup`, read by `/scrape` (and `/watch`). Shape:
 
@@ -251,11 +297,12 @@ Covered by `profile/` in `.gitignore`, so it is never committed. **Not a seventh
 `holiday-planner` template** — it holds a tooling knob (which MCP driver executes a browser read),
 not traveler data, and must never be merged into the six numbered profile files or their templates.
 
-`tools/security_guards.py` runs three checks over `git ls-files`:
+`tools/security_guards.py` runs four checks over `git ls-files`:
 
 1. **Secret patterns** — regex for `NAME=value` / `NAME: value` where `NAME` ends in `API_KEY|API_SECRET|SECRET|TOKEN|PASSWORD|ACCESS_KEY`, plus private-key blocks. Placeholder values (`<value>`, `your_key_here`, quoted templates) are allowed. A *documented* env-var name with a real-looking value attached is still flagged.
 2. **No tracked file under a personal path** — asks git directly rather than restating `.gitignore` prefixes.
 3. **`.gitignore` coverage** — probes representative sample paths (`profile/some-file.md`, `.env`, …) via `git check-ignore`.
+4. **`check_setup_gitignore_step`** — pins that `commands/setup.md`'s prose still instructs creating the plugin-mode `<DATA_ROOT>/.gitignore` (containing `*`) before the profile write. A prose pin, not a live check: it deliberately does not inspect a real `~/.ai-holiday-search`.
 
 **Two git subtleties in `tools/_repo.py` that you must not undo** (both were real bugs, documented in [issue #1](https://github.com/mathiasesn/ai-holiday-search/issues/1)):
 
@@ -274,13 +321,13 @@ Per `CLAUDE.md`: **never `git add -A` in this repo.** Check `git status` first a
 
 ```
 User types /scrape
-   → .claude/commands/scrape.md          (the procedure: inputs, steps, outputs, state touched)
-       → .claude/skills/trip-scraper/    (fan-out rules, adapter protocol, dedupe, schemas)
+   → commands/scrape.md          (the procedure: inputs, steps, outputs, state touched)
+       → skills/trip-scraper/    (fan-out rules, adapter protocol, dedupe, schemas)
            → .agents/skills/*/search.py       (the network call, or exit 2 → web-search fallback)
-           → .claude/skills/trivago-search/   (browser read, or own fallback chain → web search)
-           → .claude/skills/momondo-search/   (browser read across flights/stays/packages, or own fallback chain → web search)
-           → .claude/skills/booking-search/   (browser read across stays/flights, or own fallback chain → web search)
-       → .claude/skills/holiday-planner/03-trip-evaluation.md  (scoring + ranking)
+           → skills/trivago-search/   (browser read, or own fallback chain → web search)
+           → skills/momondo-search/   (browser read across flights/stays/packages, or own fallback chain → web search)
+           → skills/booking-search/   (browser read across stays/flights, or own fallback chain → web search)
+       → skills/holiday-planner/03-trip-evaluation.md  (scoring + ranking)
        → profile/*.md                     (the traveler's real data; must exist)
 ```
 
@@ -289,8 +336,9 @@ Commands are procedure; skills are reference. A command file states its inputs, 
 ### Frontmatter conventions (enforced by `tools/lint_skills.py`)
 
 - **`SKILL.md`** (both skill trees) requires non-empty `name` and `description`, and `name` **must equal the parent directory name**.
-- **`.claude/commands/*.md`** requires a non-empty `description`; they also carry `argument-hint` and `allowed-tools` by convention (not linted).
+- **`commands/*.md`** requires a non-empty `description`; they also carry `argument-hint` and `allowed-tools` by convention. `allowed-tools` is now checked against the command body: any backticked shell invocation whose leading token is a verb from `tools/_repo.py`'s `GUARDED_SHELL_VERBS` must be covered by a `Bash(<verb>:*)` grant, and any granted verb from the destructive subset `DESTRUCTIVE_SHELL_VERBS` must be either invoked in the body or named in an optional `destructive-tools-justification` frontmatter entry (`Bash(<verb>:*) — <reason>`, semicolon-separated for multiple entries) — a stale, missing, or unreasoned justification is a lint error. Bare `Bash` is itself a lint error: every grant must be qualified as `Bash(<verb>:*)`.
 - **All relative Markdown links must resolve**, as must any backticked repo-relative path ending in `.md`/`.py` that contains a `/` — except paths under gitignored personal directories, which are runtime paths and are skipped. Placeholder notation (`<name>`, `foo/*.md`) is intentionally not matched by the literal-path regex, so new doc notations don't require a linter change.
+- **Every runtime read target in every `commands/*.md` file must be rooted.** An agent executing a command has no doc-relative base — its cwd is the user's project, not the `commands/` directory — so any backticked path-like span or Markdown-link target naming something the command reads or writes at execution time must start with `<FRAMEWORK_ROOT>` or `<DATA_ROOT>`. The guarded set is data, not a regex per file: `tools/_repo.py`'s `FRAMEWORK_DIRS`/`FRAMEWORK_FILES` and `PERSONAL_DIRS`/`PERSONAL_FILES` drive the check, so registering a new guarded file is a one-word edit there. `commands/reset.md`'s protect-list is asserted by its own stricter guard, and the per-mode "What each mode deletes" bullets by a narrower one — no `../` targets — because those bullets legitimately name bare files in prose (`01-traveler-profile.md`) that the path-like rule would false-positive on. The one exemption is human doc-navigation: links to `../README.md`, `../SETUP.md`, `../ARCHI.md`, `../AGENTS.md` stay relative, because they resolve inside the framework root in both modes and are clicked, not executed.
 - The frontmatter parser is hand-rolled (no PyYAML): flat `key: value` scalars only, with quote stripping and wrapped-line continuation.
 
 ### The five commands
@@ -339,10 +387,10 @@ Both are versioned with `schema_version: 1` and are defined authoritatively in t
 ## 11. Conventions for Making Changes
 
 - **Adding a search source** → §8, "Adding a new source". Never add a shared import under `.agents/skills/`.
-- **Adding a slash command** → new `.md` in `.claude/commands/` with a non-empty `description` in frontmatter; state inputs, "State touched", and numbered steps, matching the existing files' shape.
-- **Adding a skill** → new directory under `.claude/skills/` containing `SKILL.md` whose frontmatter `name` matches the directory name.
+- **Adding a slash command** → new `.md` in `commands/` with a non-empty `description` in frontmatter; state inputs, "State touched", and numbered steps, matching the existing files' shape.
+- **Adding a skill** → new directory under `skills/` containing `SKILL.md` whose frontmatter `name` matches the directory name.
 - **Changing a shared schema** → edit the one authoritative file (§5.6) and update the summaries pointing at it. Nothing currently verifies command-vs-skill schema agreement ([issue #3](https://github.com/mathiasesn/ai-holiday-search/issues/3)), so this is manual and easy to drift.
-- **Changing behavioral rules** → those live in `CLAUDE.md` and the holiday-planner files, not here.
+- **Changing behavioral rules** → those live in `AGENTS.md` (`CLAUDE.md` is a symlink to it) and the holiday-planner files, not here.
 - **Before committing** → run both `tools/` scripts, and `git status` before staging. Never `git add -A`.
 
 ---
@@ -364,4 +412,4 @@ Non-negotiables — an agent working in this repo must not violate these:
 - **Markdown output only** — never PDF.
 - **Guards fail loudly.** If a check can't determine its answer, it must error, never silently pass.
 - **`uv` is the only supported toolchain.** `uv sync` / `uv run`; don't add `pip`/`requirements.txt` paths back.
-- **`CLAUDE.md` is the authority on behavior; this file on structure.** Keep them consistent.
+- **`AGENTS.md` (loaded via the `CLAUDE.md` symlink) is the authority on behavior; this file on structure.** Keep them consistent. `AGENTS.md`/`CLAUDE.md` is only loaded in clone mode — see §4a for how plugin-mode sessions carry the same rule.

@@ -21,7 +21,7 @@ Example: "Porto, Portugal", 2026-10-14 → 2026-10-19 → `porto-portugal-2026-1
 If the same destination/dates are watched from two different sources, append a short source tag:
 `porto-portugal-2026-10-14-2026-10-19-flights-search`.
 
-## `watchlist/<slug>.json` format
+## `<DATA_ROOT>/watchlist/<slug>.json` format
 
 ```json
 {
@@ -61,14 +61,14 @@ If the same destination/dates are watched from two different sources, append a s
   changed afterward — it's the baseline every later check compares against.
 - `price_history` gets a new entry appended on every `/watch` re-check (including the very
   first one, which duplicates `original_snapshot`). Never overwrite or drop earlier entries.
-- `trip` mirrors the normalized candidate record fields from `.claude/skills/trip-scraper/SKILL.md` needed to
+- `trip` mirrors the normalized candidate record fields from [../trip-scraper/SKILL.md](../trip-scraper/SKILL.md) needed to
   re-run the same search: source, route, dates, url.
 
 ## Adding a trip (`/watch add`)
 
 1. Take the trip from the most recent `/scrape` or `/plan` output (or a pasted listing).
 2. Derive the slug.
-3. Write `watchlist/<slug>.json` with `original_snapshot` and a first `price_history` entry
+3. Write `<DATA_ROOT>/watchlist/<slug>.json` with `original_snapshot` and a first `price_history` entry
    equal to it.
 
 ## Re-check procedure (`/watch`)
@@ -81,7 +81,7 @@ driver-resolution step) and, if it's available, open **one** browser context and
 consent/cookie wall **once** — not per trip. Reuse that same context for every browser-driven
 trip in this run; do not re-open a context or re-clear the wall per trip. If the driver is
 unavailable per its own readiness check (see the trigger list in
-`.claude/skills/trivago-search/SKILL.md` "Fallback chain"), degrade the **whole** browser-driven
+[../trivago-search/SKILL.md](../trivago-search/SKILL.md) "Fallback chain"), degrade the **whole** browser-driven
 branch for this run once, rather than re-discovering the unavailability on every trip.
 
 Apply the same once-per-run economy to a **blocked host**: if a site rejects the document itself
@@ -89,11 +89,11 @@ Apply the same once-per-run economy to a **blocked host**: if a site rejects the
 and send its remaining trips straight to web search. Re-navigating a host whose edge already
 refused the request wastes the navigation and every read after it on each subsequent trip.
 
-### For every file in `watchlist/`
+### For every file in `<DATA_ROOT>/watchlist/`
 
 1. Dispatch on the trip's kind (identified by `trip.source`):
    - **Adapter-backed** (`source` is one of `flights-search`, `stays-search`,
-     `packages-search`): re-run the matching `.agents/skills/*/search.py --json` adapter for
+     `packages-search`): re-run the matching `../../.agents/skills/*/search.py --json` adapter for
      the same route/dates, using `trip-scraper`'s fan-out and fallback rules (adapter → web
      search on missing credentials).
    - **Browser-driven** (`source` is one of `"trivago-search"`, `"momondo-search"`,
@@ -102,7 +102,7 @@ refused the request wastes the navigation and every read after it on each subseq
      path) if `trip.url` no longer resolves to a usable results page. This also removes most of
      the unattended-disambiguation hazard (e.g. trivago's autocomplete), since a stored URL
      needs no destination resolution. The driver contract — tool-capability mapping and
-     etiquette limits — lives once in `.claude/skills/trivago-search/SKILL.md`; follow it rather
+     etiquette limits — lives once in [../trivago-search/SKILL.md](../trivago-search/SKILL.md); follow it rather
      than duplicating it here. On any chain-ending condition (bot challenge, consent wall, zero
      results, unreadable page), fall through to Claude web search exactly as the attended
      fallback chain does. If web search also yields nothing, the check is terminal for this trip:
@@ -143,14 +143,18 @@ refused the request wastes the navigation and every read after it on each subseq
   "Re-check procedure" — `available: null` plus an `unverified_reason`. Reported as a **blocked
   read**, never as a sold-out warning.
 
+Every reported price and delta above is a web/adapter-read estimate, not a confirmed fact — label
+it as an estimate to verify at booking, and say plainly when a source (adapter, web search, or a
+re-pasted listing) could not confirm it.
+
 ## Removing a trip (`/watch remove`)
 
-Delete `watchlist/<slug>.json`. Confirm the slug and destination with the user before deleting.
+Delete `<DATA_ROOT>/watchlist/<slug>.json`. Confirm the slug and destination with the user before deleting.
 
 ## Scheduling
 
 Playwright MCP is `/watch`'s default driver because it is the only one of the two that can run
 unattended — `claude-in-chrome` needs an attended session and per-site extension permission, so
 it cannot execute on a schedule. Scheduled/cron runs require the headless server already declared
-in the repo's tracked `.mcp.json` (see `ARCHI.md` §7 for its argument list); a headed browser
+in the tracked `../../.mcp.json` (see [../../ARCHI.md](../../ARCHI.md) §7 for its argument list); a headed browser
 cannot start where there is no display.

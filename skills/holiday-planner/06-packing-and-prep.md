@@ -1,8 +1,8 @@
 # 06 — Packing and Prep
 
-> This is a generic tracked template. `/setup` may write a filled `profile/06-packing-and-prep.md`
+> This is a generic tracked template. `/setup` may write a filled `<DATA_ROOT>/profile/06-packing-and-prep.md`
 > copy with the traveler's recurring needs (e.g. medication, kids' gear). If a filled copy
-> exists in `profile/`, it wins; otherwise use this template's structure per trip type.
+> exists in `<DATA_ROOT>/profile/`, it wins; otherwise use this template's structure per trip type.
 
 ## Packing list structure by trip type
 
@@ -45,7 +45,7 @@ composition from `01-traveler-profile.md`.
 - [ ] Travel insurance purchased, covering medical, cancellation, and baggage
 - [ ] Confirm coverage includes activities planned (e.g. winter sports, water sports) if not
       covered by default
-- [ ] Note policy number and emergency contact number in `itineraries/<trip-slug>/`
+- [ ] Note policy number and emergency contact number in `<DATA_ROOT>/itineraries/<trip-slug>/`
 
 ## Vaccination / visa checklist
 

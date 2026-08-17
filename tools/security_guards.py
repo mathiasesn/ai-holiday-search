@@ -6,34 +6,44 @@ Checks (stdlib only):
      `AMADEUS_API_SECRET=<value>`, private keys, .env-style assignments), with
      an allowlist for the documented env-var NAMES appearing in docs (e.g.
      `AMADEUS_API_KEY` mentioned in a SKILL.md without a real value attached).
-  2. `.gitignore` exists and covers each personal path (`profile/`,
-     `itineraries/`, `watchlist/`, `trip_scraper/`, `trip_tracker.csv`,
-     `documents/` contents, `.env`) — verified via `git check-ignore` on
-     representative sample paths.
+  2. Clone-mode `.gitignore` coverage: `.gitignore` exists and covers each
+     personal path (`profile/`, `itineraries/`, `watchlist/`, `trip_scraper/`,
+     `trip_tracker.csv`, `documents/` contents, `.env`) — verified via
+     `git check-ignore` on representative sample paths. This check is scoped
+     to clone mode on purpose: in plugin mode, personal data is written under
+     `~/.ai-holiday-search`, entirely outside any git repository, so there is
+     no `.gitignore` for it to cover and no equivalent check is meaningful
+     there. It is NOT a no-op — it still fails if THIS repo's `.gitignore`
+     (the one clone-mode users rely on) stops covering any personal path.
   3. No tracked file lives under those personal paths.
+  4. `commands/setup.md` still instructs creating `<DATA_ROOT>/.gitignore`
+     (contents `*`) before writing any profile file, in plugin mode. This
+     guards against a real leak vector: `~/.ai-holiday-search` sits outside
+     any git repo, but `$HOME` itself may be a tracked repo (e.g. dotfiles),
+     so without that step's `.gitignore` running first, personal profile
+     data written there could get swept into an unrelated commit.
 
 Exit 0 on success; non-zero with actionable messages on failure.
 """
 import os
 import re
-import subprocess
 import sys
 
-from _repo import repo_root, ignored_paths, tracked_files as _tracked_files
+from _repo import (
+    ADAPTER_CRED_VARS,
+    PERSONAL_DIRS,
+    PERSONAL_FILES,
+    repo_root,
+    ignored_paths,
+    tracked_files as _tracked_files,
+)
 
 REPO_ROOT = repo_root()
 
 MAX_SCANNED_FILE_BYTES = 1024 * 1024  # 1 MB; skip larger tracked files (e.g. binaries).
 
 # Env var NAMES that are fine to mention in docs/code as long as no value is attached.
-ALLOWED_ENV_VAR_NAMES = {
-    "AMADEUS_API_KEY",
-    "AMADEUS_API_SECRET",
-    "STAYS_API_KEY",
-    "STAYS_API_URL",
-    "PACKAGES_API_KEY",
-    "PACKAGES_API_URL",
-}
+ALLOWED_ENV_VAR_NAMES = set(ADAPTER_CRED_VARS)
 
 # Secret-shaped patterns: NAME=value or NAME: value where NAME looks like a
 # credential. The value is captured once, quotes and all; callers strip
@@ -77,15 +87,24 @@ def looks_like_placeholder(value):
         return True
     return bool(PLACEHOLDER_PATTERN_RE.match(stripped))
 
-PERSONAL_PATHS = [
-    "profile/some-file.md",
-    "itineraries/some-trip/itinerary.md",
-    "watchlist/some-trip.json",
-    "trip_scraper/seen.json",
-    "trip_tracker.csv",
-    "documents/past-trips/some-file.md",  # representative sample under documents/
-    ".env",
-]
+# Representative sample paths under each shared personal-data name (dirs get
+# one plausible file inside them; PERSONAL_FILES entries are used as-is),
+# plus two paths that aren't part of the shared PERSONAL_DIRS/PERSONAL_FILES
+# constants (documents/ contents and .env).
+_PERSONAL_DIR_SAMPLES = {
+    "profile": "some-file.md",
+    "itineraries": "some-trip/itinerary.md",
+    "watchlist": "some-trip.json",
+    "trip_scraper": "seen.json",
+}
+PERSONAL_PATHS = (
+    [f"{d}/{_PERSONAL_DIR_SAMPLES[d]}" for d in PERSONAL_DIRS]
+    + list(PERSONAL_FILES)
+    + [
+        "documents/past-trips/some-file.md",  # representative sample under documents/
+        ".env",
+    ]
+)
 
 
 def git_ls_files():
@@ -143,6 +162,13 @@ def check_personal_paths_not_tracked(tracked_files, errors):
 
 
 def check_gitignore_coverage(errors):
+    """Clone-mode only: this repo's `.gitignore` must keep covering the
+    personal paths for anyone who forks/clones it and runs the framework
+    in-place. Plugin-mode installs write personal data to
+    `~/.ai-holiday-search`, outside any git repo, so there is nothing for a
+    `.gitignore` to cover there — that mode needs no equivalent check, and
+    deliberately has none. This check must still fail loudly if this repo's
+    own `.gitignore` regresses."""
     gitignore_path = f"{REPO_ROOT}/.gitignore"
 
     if not os.path.isfile(gitignore_path):
@@ -155,11 +181,76 @@ def check_gitignore_coverage(errors):
             errors.append(f".gitignore: does not ignore personal path '{sample}' (git check-ignore reported not ignored)")
 
 
+SETUP_MD_PATH = f"{REPO_ROOT}/commands/setup.md"
+
+# Anchor text for the plugin-mode `<DATA_ROOT>/.gitignore` step in setup.md,
+# and for the profile-writing step it must precede.
+SETUP_GITIGNORE_STEP_TEXT = "Ensure `<DATA_ROOT>` is gitignored (plugin mode only)"
+SETUP_GITIGNORE_CONTENT_TEXT = "containing a single line: `*`"
+SETUP_PROFILE_WRITE_STEP_TEXT = "Write profile files."
+
+
+def check_setup_gitignore_step(errors):
+    """commands/setup.md must still instruct creating `<DATA_ROOT>/.gitignore`
+    containing `*`, before the step that writes profile files.
+
+    Deliberately a prose pin, not a filesystem check: CI never has a real
+    `~/.ai-holiday-search`, so a check that skipped when that directory is
+    absent would read as coverage while asserting nothing on every run. The
+    observable regression is textual — the instruction deleted, or reordered
+    after profile files are already written. Anchored on stable phrases
+    rather than line numbers.
+    """
+    if not os.path.isfile(SETUP_MD_PATH):
+        errors.append("commands/setup.md: file does not exist — cannot verify the DATA_ROOT/.gitignore step")
+        return
+
+    with open(SETUP_MD_PATH, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    gitignore_idx = text.find(SETUP_GITIGNORE_STEP_TEXT)
+    if gitignore_idx == -1:
+        errors.append(
+            "commands/setup.md: missing the plugin-mode DATA_ROOT/.gitignore step "
+            f"(expected text: '{SETUP_GITIGNORE_STEP_TEXT}') — /setup must create "
+            "<DATA_ROOT>/.gitignore before writing any profile file, since $HOME may itself be a tracked repo"
+        )
+        return
+
+    profile_write_idx = text.find(SETUP_PROFILE_WRITE_STEP_TEXT)
+    if profile_write_idx == -1:
+        errors.append(
+            "commands/setup.md: missing the profile-writing step "
+            f"(expected text: '{SETUP_PROFILE_WRITE_STEP_TEXT}') — cannot verify ordering against the DATA_ROOT/.gitignore step"
+        )
+        return
+
+    # Scope the content assertion to the gitignore step's own span (from its
+    # anchor to the start of the next numbered step) rather than searching the
+    # whole file — otherwise the '*' phrase migrating elsewhere in setup.md
+    # would still satisfy `in text` even if the step itself lost it.
+    step_span = text[gitignore_idx:profile_write_idx] if profile_write_idx > gitignore_idx else text[gitignore_idx:]
+
+    if SETUP_GITIGNORE_CONTENT_TEXT not in step_span:
+        errors.append(
+            "commands/setup.md: the DATA_ROOT/.gitignore step no longer specifies writing "
+            f"'{SETUP_GITIGNORE_CONTENT_TEXT}' — the step must create the file with contents '*'"
+        )
+        return
+
+    if gitignore_idx > profile_write_idx:
+        errors.append(
+            "commands/setup.md: the DATA_ROOT/.gitignore step appears AFTER the profile-writing step — "
+            "it must run before any profile file is written, or personal data could be written unprotected first"
+        )
+
+
 def main():
     errors = []
 
     tracked_files = git_ls_files()
     check_secret_patterns(tracked_files, errors)
+    check_setup_gitignore_step(errors)
     try:
         check_personal_paths_not_tracked(tracked_files, errors)
         check_gitignore_coverage(errors)
